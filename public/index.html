@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Cockpit d'agents</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+
+  <header class="entete">
+    <div class="marque">
+      <svg width="36" height="36" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="3" opacity="0.35"/>
+        <path d="M8 31 A18 18 0 0 1 40 31" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        <line x1="24" y1="27" x2="33" y2="15" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="24" cy="27" r="3.6" fill="currentColor"/>
+      </svg>
+      <div>
+        <h1>Cockpit d'agents</h1>
+        <p class="horloge" id="horloge" aria-live="off">&nbsp;</p>
+      </div>
+    </div>
+
+    <section class="compteur" aria-labelledby="t-cout">
+      <div class="compteur-tete">
+        <span class="etiquette" id="t-cout">Coût du jour</span>
+        <span class="pastille-api" id="pastille-api" title="Tu es connecté par abonnement : ce montant est ce que ces passages coûteraient au tarif de l'API, pas une facture en plus.">Équivalent API</span>
+      </div>
+      <div class="palettes" id="palettes" role="img" aria-label="Coût du jour : 0,00 €"></div>
+      <p class="rapport-jour" id="rapport-jour">&nbsp;</p>
+    </section>
+
+    <section class="budget" aria-labelledby="t-plafond">
+      <div class="budget-chiffres">
+        <div>
+          <span class="etiquette" id="t-plafond">Plafond du jour</span>
+          <span class="gros-chiffre" id="plafond">·</span>
+        </div>
+        <div>
+          <span class="etiquette" id="t-reste">Reste</span>
+          <span class="gros-chiffre" id="reste">·</span>
+        </div>
+      </div>
+      <p class="estime" id="estime" hidden></p>
+      <div class="jauge" id="jauge" role="img" aria-label="Part du plafond du jour déjà dépensée"></div>
+    </section>
+
+    <section class="annonciateurs" aria-label="Alertes en cours, par type">
+      <div class="voyant echec" id="voyant-echec"><span class="etiquette">Échec</span><span class="compte">0</span></div>
+      <div class="voyant budget" id="voyant-budget"><span class="etiquette">Budget</span><span class="compte">0</span></div>
+      <div class="voyant retard" id="voyant-retard"><span class="etiquette">Retard</span><span class="compte">0</span></div>
+    </section>
+  </header>
+
+  <main class="poste">
+    <div class="colonne gauche">
+      <section class="panneau panneau-agents" aria-labelledby="t-agents">
+        <h2 id="t-agents">Agents <span class="detail" id="detail-agents"></span></h2>
+        <div class="entete-strips" aria-hidden="true">
+          <span class="etiquette">Agent</span>
+          <span class="etiquette" data-col="statut">Statut</span>
+          <span class="etiquette">Dernier</span>
+          <span class="etiquette">Prochain</span>
+          <span class="etiquette">Aujourd'hui</span>
+          <span></span>
+        </div>
+        <ul class="strips" id="agents"></ul>
+      </section>
+
+      <section class="panneau panneau-alertes" aria-labelledby="t-alertes">
+        <h2 id="t-alertes">Alertes <span class="detail" id="detail-alertes"></span></h2>
+        <ul class="alertes-liste" id="alertes" aria-live="polite"></ul>
+      </section>
+    </div>
+
+    <div class="colonne droite">
+      <section class="panneau panneau-journal" aria-labelledby="t-journal">
+        <h2 id="t-journal">Journal en direct <span class="detail voyant-enreg" id="voyant-enreg"><span class="led"></span><span id="texte-enreg">en attente</span></span></h2>
+        <p class="repos-titre" id="repos-titre" hidden></p>
+        <div class="enregistreur" id="journal" role="log" aria-live="off" tabindex="0"></div>
+      </section>
+
+      <section class="panneau panneau-historique" aria-labelledby="t-historique">
+        <h2 id="t-historique">Historique <span class="detail">derniers passages</span></h2>
+        <div class="cadre-table">
+          <table class="historique">
+            <thead>
+              <tr>
+                <th scope="col">Heure</th>
+                <th scope="col">Agent</th>
+                <th scope="col" class="num">Durée</th>
+                <th scope="col" class="num">Coût</th>
+                <th scope="col">Statut</th>
+                <th scope="col">Résultat</th>
+              </tr>
+            </thead>
+            <tbody id="historique"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <aside class="fiche" id="fiche" aria-labelledby="fiche-nom" hidden>
+      <header class="fiche-tete">
+        <div>
+          <span class="etiquette">Fiche de l'agent</span>
+          <h2 id="fiche-nom">Agent</h2>
+        </div>
+        <button type="button" class="fiche-fermer" id="fiche-fermer" aria-label="Fermer la fiche">×</button>
+      </header>
+      <p class="fiche-description" id="fiche-description"></p>
+      <p class="fiche-declenchement" id="fiche-declenchement"></p>
+      <dl class="fiche-donnees">
+        <div><dt class="etiquette">Budget du jour</dt><dd id="fiche-budget"></dd></div>
+        <div><dt class="etiquette">Dernier passage</dt><dd id="fiche-dernier"></dd></div>
+        <div><dt class="etiquette">Résultat</dt><dd id="fiche-resultat"></dd></div>
+      </dl>
+      <div class="fiche-actions">
+        <a class="fiche-ouvrir" id="fiche-ouvrir" href="/">Ouvrir le résultat</a>
+        <button type="button" class="lancer" id="fiche-lancer">Lancer</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="pied">
+    <span id="pied-claude">Claude Code</span>
+    <span id="pied-reglages"></span>
+    <span>Les coûts sont l'estimation de Claude Code, pas une facture.</span>
+    <span class="connexion" id="connexion"><span class="led"></span><span id="texte-connexion">connexion…</span></span>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="voile" id="voile" hidden></div>
+  <aside class="lecteur" id="lecteur" role="dialog" aria-modal="true" aria-labelledby="lecteur-titre" hidden>
+    <header class="lecteur-tete">
+      <div>
+        <span class="etiquette" id="lecteur-agent"></span>
+        <h2 id="lecteur-titre">Résultat</h2>
+        <p class="lecteur-meta" id="lecteur-meta"></p>
+      </div>
+      <button type="button" class="fermer" id="lecteur-fermer" aria-label="Fermer le résultat">Fermer</button>
+    </header>
+    <article class="lecteur-corps md" id="lecteur-corps" tabindex="0"></article>
+  </aside>
+</body>
+</html>

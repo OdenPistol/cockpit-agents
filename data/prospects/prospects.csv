@@ -1,0 +1,16 @@
+id;contact;entreprise;activite;sujet;dernier_echange;dernier_message;statut;note;fictif
+P01;Lucile Garnaudie;Pâtisserie Garnaudie;pâtisserie artisanale, 7 salariés;diagnostic d'organisation;2026-09-23;envoyé;devis envoyé;devis envoyé après un échange par téléphone, elle voulait en parler à son associé;oui
+P02;Gaëtan Chastagnol;Garage Chastagnol;garage automobile, 6 salariés;formation des chefs d'équipe;2026-09-27;envoyé;premier contact;présentation de l'offre envoyée après un appel, pas de retour;oui
+P03;Mathilde Vernassier;Optique Vernassier;opticien, 4 salariés;atelier plannings;2026-10-02;envoyé;rendez-vous fait;rendez-vous fait en magasin, compte rendu envoyé, elle a parlé des plannings de congés;oui
+P04;Anselme Escoffre;Électricité Escoffre;électricité générale, 8 salariés;suivi mensuel à distance;2026-10-06;envoyé;devis envoyé;devis envoyé pour un suivi sur trois mois;oui
+P05;Rosalie Gauthéron;Fleurs Gauthéron;fleuriste, 3 salariés;organisation des livraisons;2026-10-09;envoyé;premier contact;a écrit par le site, réponse envoyée avec deux créneaux possibles;oui
+P06;Valentin Hurtebize;Auto-école Hurtebize;auto-école, 5 salariés;planning des moniteurs;2026-10-11;envoyé;rendez-vous fait;rendez-vous sur place, deux dates de suite proposées;oui
+P07;Joséphine Lacharme;Cave Lacharme;caviste, 2 salariés;tableau de bord des ventes;2026-10-12;envoyé;devis envoyé;devis envoyé, elle a demandé un petit budget;oui
+P08;Mathias Jaladon;Brasserie Jaladon;brasserie artisanale, 9 salariés;organisation de la production;2026-10-18;envoyé;premier contact;a écrit dimanche soir, première réponse envoyée;oui
+P09;Clémence Olagnon;Charpente Olagnon;charpente, 11 salariés;diagnostic d'organisation;2026-10-19;envoyé;rendez-vous fait;rendez-vous fait lundi, compte rendu envoyé;oui
+P10;Victor Calvignac;Studio Calvignac;studio photo, 3 salariés;suivi des commandes clients;2026-10-21;envoyé;premier contact;réponse envoyée ce matin;oui
+P11;Elsa Mauchamp;Verger Mauchamp;arboriculture, 12 salariés;planning de la cueillette;2026-10-01;reçu;refus;a décliné, la saison est trop chargée, ne souhaite pas être relancée;oui
+P12;Théophile Ducroquet;Transports Ducroquet;transport routier, 14 salariés;tableau de bord logistique;2026-10-07;envoyé;client;mission commencée, premier atelier fait;oui
+P13;Albane Bouteloup;Cabinet Bouteloup;expertise comptable, 6 salariés;formation des collaborateurs;2026-10-10;reçu;devis envoyé;a posé deux questions sur le devis, pas encore de réponse de notre part;oui
+P14;Basile Marcoux;Paysages Marcoux;paysagiste, 10 salariés;diagnostic d'organisation;2026-10-05;reçu;premier contact;a demandé un rendez-vous, pas encore de réponse de notre part;oui
+P15;Pauline Reynaudet;Encadrements Reynaudet;encadrement d'art, 2 salariés;suivi mensuel à distance;2026-10-04;envoyé;rendez-vous fait;a demandé à être recontactée après le 2026-11-16, période de bilan;oui

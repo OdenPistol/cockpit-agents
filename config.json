@@ -1,0 +1,24 @@
+{
+  "port": 4321,
+  "taux_usd_eur": 0.86,
+  "plafond_jour_eur": 2,
+  "estimation_defaut_eur": 0.15,
+  "modele": "sonnet",
+  "configuration_isolee": true,
+  "commande_claude": "claude",
+  "delai_max_s": 600,
+  "tolerance_retard_min": 3,
+  "ordre": [
+    "veille",
+    "securite",
+    "boite-mail",
+    "factures",
+    "devis",
+    "avis",
+    "prospects",
+    "contenu",
+    "rapport-du-matin"
+  ],
+  "abonnement": "auto",
+  "ouvrir_navigateur": true
+}

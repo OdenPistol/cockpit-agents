@@ -1,0 +1,3 @@
+> Transcription fictive d'un mémo vocal, non relue.
+
+alors euh note pour moi, retour de chez le client entrepôt, ce qui m'a frappé c'est que tout le monde se plaint du reporting mais personne sait qui est censé le valider, donc voilà, le sujet c'est pas l'outil de reporting, c'est le moment où quelqu'un dit « c'est bon, c'est vérifié », et ce quelqu'un il existe pas, euh, il faut un nom, un jour, une heure, pour la validation, et je pense que ça marche pour plein d'autres choses, les devis, les plannings, les relances de factures aussi, il faut que je fasse un truc là-dessus, peut-être un post, avec l'histoire des deux fichiers qui se parlent pas, sans citer le client évidemment, voilà, bon, feu rouge, je coupe

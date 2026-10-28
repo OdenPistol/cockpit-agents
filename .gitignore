@@ -1,0 +1,21 @@
+# Secrets : ce projet n'en utilise aucun, mais on ne risque rien.
+.env
+.env.*
+*.pem
+*.key
+credentials*
+
+# Dépendances et fichiers du système
+node_modules/
+.DS_Store
+
+# Ce que produit l'outil en tournant : propre à chaque machine
+journal/*.jsonl
+out/*
+!out/.gitkeep
+
+# Journal du serveur lancé au démarrage du Mac (launchd)
+journal/*.log
+
+# Réglages locaux de Claude Code dans ce dossier : propres à chaque machine, jamais publiés
+.claude/

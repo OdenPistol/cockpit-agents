@@ -1,0 +1,9 @@
+{
+  "fictif": true,
+  "outil": "envoi des relances",
+  "serveur": "smtp.exemple-services.example",
+  "port": 587,
+  "utilisateur": "relances@exemple-services.example",
+  "mot_de_passe": "motdepasse-exemple-faux-0000",
+  "jeton_acces": "tok-exemple-FAUX-0000-1111-2222"
+}

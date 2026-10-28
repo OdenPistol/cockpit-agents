@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Modèle de lancement du cockpit au démarrage du Mac (launchd). Rien n'est installé automatiquement.
+  Remplace chaque /CHEMIN/VERS/... par un vrai chemin :
+    /CHEMIN/VERS/node            réponse de « which node »
+    /CHEMIN/VERS/cockpit-agents  réponse de « pwd » dans le dossier du projet
+    /CHEMIN/VERS/bin             dossier de la commande « claude » (réponse de « which claude », sans le nom final)
+  Puis : copier ce fichier dans ~/Library/LaunchAgents/ et taper
+    launchctl load ~/Library/LaunchAgents/cockpit-agents.plist
+  Pour l'arrêter : launchctl unload ~/Library/LaunchAgents/cockpit-agents.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>local.cockpit-agents</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/CHEMIN/VERS/node</string>
+    <string>/CHEMIN/VERS/cockpit-agents/server.js</string>
+    <string>--sans-navigateur</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/CHEMIN/VERS/cockpit-agents</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/CHEMIN/VERS/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- relance le cockpit s'il s'arrête sur une erreur, mais pas quand tu l'arrêtes toi-même -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/CHEMIN/VERS/cockpit-agents/journal/serveur.log</string>
+  <key>StandardErrorPath</key>
+  <string>/CHEMIN/VERS/cockpit-agents/journal/serveur.log</string>
+</dict>
+</plist>

@@ -1,0 +1,995 @@
+/*
+  Cockpit d'agents : un tableau de bord d'instruments, fait pour être filmé.
+  Un seul geste fort, le compteur kilométrique du coût du jour (ses chiffres roulent quand il monte) ;
+  autour, le calme : fond graphite uni, surfaces à peine plus claires, filets pleins, la couleur réservée aux statuts.
+
+  Palette (aucun cyan, aucun or) :
+    nuit    #161821  fond ardoise               papier  #f2f0eb  texte, blanc chaud
+    violet  #a998ff  marque, boutons, liens     menthe  #4fdc9c  réussi
+    bleu    #6ea2ff  agent en cours (lui seul)  orange  #ff8a4c  budget, retard
+    rose    #ff5c7a  échec
+  Polices : l'interface du système (SF Pro sur Mac) pour le texte ; les chiffres en DIN, la police des instruments
+  et des panneaux routiers, faite pour être lue de loin ; le journal en monospace.
+  Lisibilité en capture 1080p filmée à 120 % (tout plus petit, plus clair, bandeau mince) :
+  aucun texte sous 14 px, chiffres clés à 24 px et plus, trois niveaux de texte seulement
+  (papier pour la donnée, brume pour son contexte, brume-2 pour les intitulés).
+
+  Trois paliers de largeur, pour que rien ne soit coupé même à 125 % de zoom sur un écran 1920×1080
+  (la fenêtre fait alors 1536 px de large) :
+    1810 px et plus   deux colonnes larges
+    1500 à 1809 px    deux colonnes compactes
+    moins de 1500 px  tout en une colonne, la page défile verticalement
+  À partir de 1500 px, la liste des agents occupe toute la hauteur à gauche (dix agents tiennent sans défiler) ;
+  à droite : alertes, journal en direct, historique.
+*/
+
+:root {
+  color-scheme: dark;
+
+  --nuit: #161821;
+  --rack: #1d2029;
+  --rack-2: #242836;
+  --filet: #353a48;
+  --papier: #f2f0eb;
+  --brume: #b9bdc9;
+  --brume-2: #9a9fad;
+
+  --violet: #a998ff;
+  --bleu: #6ea2ff;
+  --menthe: #4fdc9c;
+  --orange: #ff8a4c;
+  --rose: #ff5c7a;
+  --gris: #9a99a6;
+
+  --police-titre: system-ui, -apple-system, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --police-texte: system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --police-chiffres: "DIN Alternate", "Bahnschrift", "D-DIN", "Roboto Condensed", system-ui, sans-serif;
+  --police-donnees: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  --t-min: 14px;
+  --t-corps: 15px;
+  --t-nom: 18px;
+  --t-chiffre: 26px;
+  --t-gros: 26px;
+  --t-hero: 44px;
+
+  --rayon: 12px;
+  --rayon-petit: 8px;
+  --espace: 16px;
+  /* la colonne de droite suit la largeur de la fenêtre : 563 px à 1810 px, 595 px à 1920 px */
+  --col-droite: clamp(540px, 31vw, 640px);
+  /* nom, statut (assez large pour « Contrôle 3/5 · relance 1/2 »), dernier, prochain, coût du jour, bouton :
+     à 1920 px, le nom garde environ 550 px, de quoi tenir une ligne « ce qu'il a fait » de 80 caractères */
+  --colonnes-strip: 12px minmax(250px, 1fr) 160px 90px 118px 140px 96px;
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--nuit); }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* un fond uni ; une seule lueur, très faible, derrière le compteur */
+  background: radial-gradient(760px 300px at 30% -80px, rgba(169, 152, 255, 0.07) 0%, transparent 70%), var(--nuit);
+  color: var(--papier);
+  font-family: var(--police-texte);
+  font-size: var(--t-corps);
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01" 0;
+}
+
+h1, h2, p, ul, ol { margin: 0; padding: 0; }
+ul { list-style: none; }
+button { font: inherit; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; border-radius: 4px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* un intitulé : petit, espacé, discret ; la donnée qu'il nomme passe devant */
+.etiquette {
+  font-family: var(--police-texte);
+  font-size: var(--t-min);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brume-2);
+}
+
+/* ------------------------------------------------------------------ bandeau du haut */
+
+.entete {
+  display: grid;
+  grid-template-columns: 250px auto minmax(320px, 1fr) auto;
+  align-items: center;
+  gap: 28px;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--filet);
+}
+
+.marque { display: flex; align-items: center; gap: 12px; color: var(--violet); }
+.marque svg { flex: none; width: 36px; height: 36px; }
+.marque h1 {
+  font-family: var(--police-titre);
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--papier);
+}
+.marque p { font-size: var(--t-min); color: var(--brume); margin-top: 3px; }
+.marque .horloge { font-variant-numeric: tabular-nums; }
+.marque .horloge::first-letter { text-transform: uppercase; }
+
+/* le compteur du coût du jour : des fenêtres de compteur kilométrique, les chiffres roulent vers le haut ;
+   à droite des chiffres, ce qu'ils ont payé : le nombre de tâches réussies du jour */
+.compteur {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas: "tete tete" "palettes rapport";
+  align-items: end;
+  column-gap: 14px;
+  row-gap: 4px;
+}
+.compteur-tete { grid-area: tete; }
+.palettes { grid-area: palettes; }
+.rapport-jour { grid-area: rapport; padding-bottom: 4px; }
+.compteur-tete { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pastille-api {
+  display: none;
+  font-size: var(--t-min);
+  font-weight: 600;
+  padding: 0 9px;
+  border: 1px solid rgba(169, 152, 255, 0.45);
+  border-radius: 999px;
+  color: var(--violet);
+}
+.pastille-api.visible { display: inline-block; }
+
+.palettes {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  font-family: var(--police-chiffres);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: var(--t-hero);
+  line-height: 1;
+}
+/* chaque palette est une fenêtre du compteur : creusée dans le bandeau, un liseré, aucune charnière */
+.palette {
+  position: relative;
+  display: grid;
+  min-width: 32px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #1a1d26;
+  box-shadow: inset 0 0 0 1px #3a3f4e, inset 0 6px 12px rgba(0, 0, 0, 0.35);
+  color: var(--papier);
+}
+.palette > span {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  padding: 5px 3px 2px;
+  border-radius: inherit;
+}
+/* pendant que le chiffre roule : un cache uni sur le nouveau chiffre, l'ancien sort par le haut, le nouveau entre par le bas,
+   en cascade de gauche à droite (90 ms d'écart) : un mouvement lisible à la caméra, sans effet de manège */
+.palette .ancien-bas { background: inherit; color: transparent; z-index: 1; animation: cache 560ms steps(1, end) var(--retard, 0ms) both; }
+.palette .volet { z-index: 2; background: none; }
+.palette .volet-haut { animation: sortie 320ms cubic-bezier(0.55, 0, 0.75, 0.2) var(--retard, 0ms) both; }
+.palette .volet-bas { animation: entree-chiffre 380ms cubic-bezier(0.2, 0.7, 0.2, 1) calc(var(--retard, 0ms) + 180ms) both; }
+.palette.separateur { min-width: 12px; background: none; box-shadow: none; color: var(--brume); }
+.palette.devise { min-width: 30px; color: var(--violet); }
+/* sous le compteur, ce que la somme a payé : le nombre de tâches réussies du jour */
+.rapport-jour { font-size: var(--t-corps); line-height: 1.2; color: var(--brume); white-space: nowrap; }
+.rapport-jour strong { color: var(--papier); font-weight: 650; }
+
+@keyframes cache { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sortie {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(-70%); opacity: 0; }
+}
+@keyframes entree-chiffre {
+  from { transform: translateY(75%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* plafond, reste et jauge à segments */
+.budget { display: grid; gap: 8px; align-content: center; }
+.budget-chiffres { display: flex; gap: 32px; flex-wrap: wrap; }
+.budget-chiffres > div { display: grid; gap: 2px; }
+.gros-chiffre {
+  font-family: var(--police-chiffres);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: var(--t-gros);
+  line-height: 1;
+}
+.gros-chiffre.attention { color: var(--orange); }
+.gros-chiffre.depasse { color: var(--rose); }
+.estime { font-size: var(--t-min); color: var(--orange); font-weight: 600; }
+.estime[hidden] { display: none; }
+
+.jauge {
+  display: grid;
+  grid-template-columns: repeat(40, 1fr);
+  gap: 3px;
+  height: 8px;
+}
+.jauge i {
+  display: block;
+  background: #2e3240;
+  border-radius: 2px;
+  transition: background-color 300ms ease;
+}
+.jauge i.plein { background: var(--violet); }
+.jauge.attention i.plein { background: var(--orange); }
+.jauge.depasse i.plein { background: var(--rose); }
+
+/* annonciateurs : éteints, un simple cadre ; allumés, un aplat de couleur qui se voit de l'autre bout de la pièce */
+.annonciateurs { display: flex; gap: 8px; }
+.voyant {
+  display: grid;
+  grid-template-rows: auto auto;
+  justify-items: center;
+  gap: 2px;
+  width: 84px;
+  padding: 6px 4px;
+  border: 1px solid var(--filet);
+  border-radius: var(--rayon);
+  background: var(--rack);
+  color: var(--brume-2);
+  transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+.voyant .compte {
+  font-family: var(--police-chiffres);
+  font-size: var(--t-gros);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--brume);
+}
+.voyant.allume { color: var(--nuit); border-color: transparent; }
+.voyant.allume .etiquette, .voyant.allume .compte { color: var(--nuit); }
+.voyant.echec.allume { background: var(--rose); box-shadow: 0 0 0 4px rgba(255, 92, 122, 0.18), 0 0 36px rgba(255, 92, 122, 0.35); }
+.voyant.budget.allume,
+.voyant.retard.allume { background: var(--orange); box-shadow: 0 0 0 4px rgba(255, 138, 76, 0.18), 0 0 36px rgba(255, 138, 76, 0.32); }
+.voyant.flash { animation: flash 900ms steps(1, end); }
+
+@keyframes flash {
+  0%, 33%, 66% { filter: brightness(1.25); }
+  16%, 50%, 83% { filter: brightness(0.55); }
+  100% { filter: none; }
+}
+
+/* ------------------------------------------------------------------ poste de pilotage */
+
+.poste {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--col-droite);
+  gap: var(--espace);
+  padding: var(--espace) 28px;
+  min-height: 0;
+}
+.colonne { display: grid; gap: var(--espace); min-height: 0; }
+/* la liste des agents prend la place de son contenu, les alertes se partagent le reste */
+.colonne.gauche { grid-template-rows: minmax(0, auto) minmax(96px, 1fr); }
+.colonne.droite { grid-template-rows: minmax(260px, 1.3fr) minmax(220px, 1fr); }
+
+.panneau {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--filet);
+  border-radius: var(--rayon);
+  background: var(--rack);
+}
+.panneau > h2 {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 18px 10px;
+  font-family: var(--police-texte);
+  font-size: var(--t-min);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--papier);
+}
+.panneau > h2 .detail {
+  font-family: var(--police-texte);
+  font-size: var(--t-min);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--brume-2);
+}
+
+/* liste des agents : des lignes, pas des cartes ; un filet les sépare */
+.entete-strips, .strip {
+  display: grid;
+  grid-template-columns: var(--colonnes-strip);
+  column-gap: 12px;
+  align-items: center;
+}
+.entete-strips { padding: 0 16px 8px 0; border-bottom: 1px solid var(--filet); }
+.entete-strips .etiquette:first-child { grid-column: 2; }
+
+.strips { display: grid; gap: 0; align-content: start; padding: 4px 16px 10px 0; flex: 1; min-height: 0; overflow: auto; }
+
+.strip {
+  position: relative;
+  min-height: 84px;
+  padding: 8px 0;
+  border-radius: 0 var(--rayon-petit) var(--rayon-petit) 0;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+.strip:last-child { box-shadow: none; }
+.strip { cursor: pointer; }
+.strip:hover { background: rgba(255, 255, 255, 0.025); }
+/* la ligne dont la fiche est ouverte (les couleurs de statut, plus bas, passent devant) */
+.strip.choisie { background: rgba(169, 152, 255, 0.07); }
+.strip.choisie .rail { background: var(--violet); }
+/* l'agent en cours : un lavis bleu, un liseré, et une ligne de progression qui court au pied de la ligne */
+.strip[data-statut="en_cours"] {
+  background: rgba(110, 162, 255, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(110, 162, 255, 0.4);
+}
+.strip[data-statut="en_cours"]::after {
+  content: "";
+  position: absolute; left: 0; bottom: 0;
+  width: 34%; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--bleu) 50%, transparent 100%);
+  animation: progression 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  pointer-events: none;
+}
+/* bloqué ou en échec : un lavis de sa couleur, pour que la ligne se voie de loin */
+.strip[data-statut="bloque_budget"] { background: rgba(255, 138, 76, 0.08); }
+.strip[data-statut="echec"], .strip[data-statut="refuse_controle"], .strip[data-statut="invalide"] { background: rgba(255, 92, 122, 0.06); }
+.strip[data-statut="en_cours"] .strip-nom span.action-en-cours { color: var(--bleu); font-family: var(--police-donnees); }
+/* ce que l'agent a fait aujourd'hui, en clair : la donnée passe devant la description */
+.strip-nom span.fait { color: var(--papier); }
+
+@keyframes progression { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+/* le rail : un trait de couleur à gauche, la couleur du statut */
+.strip .rail { align-self: stretch; justify-self: start; width: 4px; margin: 12px 0; border-radius: 0 3px 3px 0; background: transparent; }
+.strip[data-statut="en_cours"] .rail { background: var(--bleu); opacity: 1; box-shadow: 0 0 12px var(--bleu); }
+.strip[data-statut="echec"] .rail { background: var(--rose); opacity: 1; }
+.strip[data-statut="refuse_controle"] .rail { background: var(--rose); opacity: 1; }
+.strip[data-statut="bloque_budget"] .rail { width: 6px; background: var(--orange); opacity: 1; }
+.strip[data-statut="invalide"] .rail { background: var(--rose); opacity: 1; }
+
+.strip-nom { min-width: 0; }
+.strip-nom strong {
+  display: block;
+  font-family: var(--police-titre);
+  font-size: var(--t-nom);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.strip-nom span {
+  /* jamais coupée au milieu d'un mot : elle passe sur une deuxième ligne (le texte complet reste dans l'infobulle) */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--t-min);
+  color: var(--brume);
+}
+
+.strip-statut { display: grid; gap: 2px; }
+.mot-statut { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: var(--t-corps); white-space: nowrap; }
+.led {
+  flex: none;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--gris);
+  box-shadow: 0 0 0 3px rgba(154, 153, 166, 0.16);
+}
+.strip[data-statut="en_cours"] .led { background: var(--bleu); box-shadow: 0 0 0 4px rgba(110, 162, 255, 0.22), 0 0 12px var(--bleu); animation: pouls 1.4s ease-in-out infinite; }
+.strip[data-statut="reussi"] .led { background: var(--menthe); box-shadow: 0 0 0 3px rgba(79, 220, 156, 0.16); }
+.strip[data-statut="echec"] .led,
+.strip[data-statut="refuse_controle"] .led,
+.strip[data-statut="invalide"] .led { background: var(--rose); box-shadow: 0 0 0 3px rgba(255, 92, 122, 0.2); }
+.strip[data-statut="bloque_budget"] .led { background: var(--orange); box-shadow: 0 0 0 3px rgba(255, 138, 76, 0.2); }
+.strip[data-statut="en_cours"] .mot-statut,
+.strip[data-statut="en_cours"] .detail-statut { color: var(--bleu); }
+.strip[data-statut="reussi"] .mot-statut { color: var(--menthe); }
+.strip[data-statut="echec"] .mot-statut,
+.strip[data-statut="refuse_controle"] .mot-statut,
+.strip[data-statut="invalide"] .mot-statut { color: var(--rose); }
+.strip[data-statut="bloque_budget"] .mot-statut { color: var(--orange); }
+
+@keyframes pouls { 50% { opacity: 0.4; } }
+@keyframes clignote { 50% { opacity: 0.35; } }
+
+.strip small, .valeur-petite { font-size: var(--t-min); color: var(--brume-2); }
+/* sous le mot de statut, le contrôle de l'agent : vert accepté, orange relance en cours, rouge refusé jusqu'au bout */
+.strip small.detail-statut { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 20px; }
+.strip small.detail-statut.controle-ok { color: var(--menthe); font-weight: 650; }
+.strip small.detail-statut.controle-relance { color: var(--orange); font-weight: 650; }
+.strip small.detail-statut.controle-refus { color: var(--rose); font-weight: 650; }
+.heure {
+  font-family: var(--police-chiffres);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 21px;
+  line-height: 1.05;
+  color: var(--papier);
+}
+.strip-prochain .heure { color: var(--brume); }
+.strip-dernier, .strip-prochain { display: grid; gap: 2px; }
+.strip small.retard { color: var(--orange); font-weight: 650; }
+
+.strip-cout { display: grid; gap: 6px; }
+.cout-ligne { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.cout-valeur { grid-column: 1 / -1; white-space: nowrap; }
+.cout-ligne .cout-budget { grid-row: 2; grid-column: 2; white-space: nowrap; line-height: 1; }
+.strip-cout .mini-jauge { grid-row: 2; grid-column: 1; }
+.cout-valeur {
+  font-family: var(--police-chiffres);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: var(--t-chiffre);
+  line-height: 1;
+}
+.cout-budget { font-size: var(--t-min); color: var(--brume-2); font-variant-numeric: tabular-nums; }
+.mini-jauge { display: block; height: 4px; border-radius: 2px; background: var(--filet); overflow: hidden; }
+.mini-jauge i { display: block; height: 100%; width: 0; background: var(--violet); border-radius: 2px; transition: width 600ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.mini-jauge.attention i { background: var(--orange); }
+.mini-jauge.depasse i { background: var(--rose); }
+
+.lancer {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
+  border: 1px solid rgba(169, 152, 255, 0.3);
+  border-radius: var(--rayon-petit);
+  background: transparent;
+  color: var(--violet);
+  font-weight: 650;
+  font-size: var(--t-corps);
+  cursor: pointer;
+  transition: transform 80ms ease, background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+/* un triangle de lecture dessiné, sans police d'icônes */
+.lancer::before {
+  content: "";
+  flex: none;
+  width: 0; height: 0;
+  border-left: 8px solid currentColor;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+/* au survol, le bouton s'allume : c'est l'action de la ligne */
+.lancer:hover:not(:disabled), .lancer:focus-visible { background: var(--violet); border-color: var(--violet); color: var(--nuit); }
+.lancer:active:not(:disabled) { transform: translateY(1px); }
+.lancer:disabled { background: transparent; border-color: var(--filet); color: var(--brume-2); cursor: default; }
+.lancer:disabled::before { display: none; }
+/* dans la liste, neuf boutons pareils font du bruit : au repos, un contour fin et discret ; la ligne survolée
+   allume le sien en violet ; le survol du bouton le remplit (règle ci-dessus) */
+.strip .lancer:not(:disabled):not(:hover):not(:focus-visible) { border-color: var(--filet); color: var(--brume); }
+.strip:hover .lancer:not(:disabled):not(:hover):not(:focus-visible) { border-color: rgba(169, 152, 255, 0.6); color: var(--violet); }
+/* l'agent en cours : son bouton le dit, en bleu, avec un point qui bat */
+.strip[data-statut="en_cours"] .lancer:disabled { color: var(--bleu); border-color: rgba(110, 162, 255, 0.45); }
+.strip[data-statut="en_cours"] .lancer:disabled::before {
+  display: block;
+  width: 8px; height: 8px;
+  border: 0;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pouls 1.4s ease-in-out infinite;
+}
+.strip[data-statut="invalide"] .lancer { display: none; }
+
+/* alertes */
+.alertes-liste { display: grid; gap: 8px; padding: 2px 16px 14px; overflow: auto; align-content: start; flex: 1; min-height: 0; }
+.alerte {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 14px;
+  align-items: start;
+  padding: 12px 16px;
+  border-radius: var(--rayon-petit);
+  background: var(--rack-2);
+  box-shadow: inset 3px 0 0 var(--gris);
+}
+.alerte .type {
+  font-family: var(--police-texte);
+  font-weight: 700;
+  font-size: var(--t-min);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-top: 1px;
+}
+.alerte.echec { background: rgba(255, 92, 122, 0.08); box-shadow: inset 3px 0 0 var(--rose); } .alerte.echec .type { color: var(--rose); }
+.alerte.budget { background: rgba(255, 138, 76, 0.08); box-shadow: inset 3px 0 0 var(--orange); } .alerte.budget .type { color: var(--orange); }
+.alerte.retard { background: rgba(255, 138, 76, 0.08); box-shadow: inset 3px 0 0 var(--orange); } .alerte.retard .type { color: var(--orange); }
+.alerte.config { box-shadow: inset 3px 0 0 var(--violet); } .alerte.config .type { color: var(--violet); }
+.alerte p { font-size: var(--t-corps); line-height: 1.4; }
+.vide {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 18px; color: var(--brume);
+}
+.vide .led { background: var(--menthe); box-shadow: 0 0 0 3px rgba(79, 220, 156, 0.16); }
+#journal-vide { display: block; padding: 14px 0; font-family: var(--police-texte); color: var(--brume-2); }
+/* au repos : les étapes du dernier passage terminé, atténuées, sous un titre qui dit lequel (il ne défile pas) */
+.repos-titre { padding: 0 18px 6px; font-size: var(--t-min); color: var(--brume-2); }
+.repos-titre[hidden] { display: none; }
+.repos-titre strong { color: var(--brume); font-weight: 650; }
+.repos { opacity: 0.55; }
+.repos .ligne { animation: none; }
+
+/* journal en direct */
+.voyant-enreg { display: inline-flex; align-items: center; gap: 8px; }
+.voyant-enreg .led { width: 10px; height: 10px; }
+.voyant-enreg.actif { color: var(--papier); }
+.voyant-enreg.actif .led { background: var(--rose); box-shadow: 0 0 0 3px rgba(255, 92, 122, 0.2), 0 0 10px var(--rose); animation: clignote 1.2s ease-in-out infinite; }
+
+.enregistreur {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 10px 12px 18px;
+  font-family: var(--police-donnees);
+  font-size: var(--t-min);
+  line-height: 1.5;
+  scroll-behavior: auto;
+}
+.ligne {
+  display: grid;
+  grid-template-columns: 82px 112px 1fr;
+  column-gap: 10px;
+  align-items: baseline;
+  padding: 2px 0;
+  animation: entree 200ms ease-out;
+}
+@keyframes entree { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ligne time { color: var(--brume-2); font-variant-numeric: tabular-nums; }
+.ligne .puce {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-family: var(--police-texte);
+  font-size: var(--t-min);
+  font-weight: 600;
+  color: var(--brume);
+  background: rgba(242, 240, 235, 0.07);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ligne .texte { overflow-wrap: anywhere; color: var(--papier); }
+.insecable { white-space: nowrap; }
+.ligne.texte-claude .texte { color: var(--brume); font-family: var(--police-texte); font-style: italic; }
+.ligne.info .texte { color: var(--brume); }
+.ligne.avertissement .texte { color: var(--orange); }
+.ligne.erreur .texte { color: var(--rose); }
+.ligne.fin .texte { color: var(--menthe); font-weight: 600; }
+.ligne.action .texte::before { content: "› "; color: var(--violet); }
+
+/* le rapport du contrôle : un bloc de lignes à toute la largeur, sans heure ni puce, dans la police de lecture :
+   les critères réussis, une ligne par critère raté (ses autres constats dessous), la vérification en plus, le verdict */
+.ligne.t-controle, .ligne.t-critere, .ligne.t-detail, .ligne.t-en_plus {
+  display: block;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--filet);
+  font-family: var(--police-texte);
+  font-size: var(--t-corps);
+  line-height: 1.4;
+}
+.ligne.t-controle.info { margin-top: 4px; }
+.ligne.t-controle.fin .texte, .ligne.t-controle.avertissement .texte, .ligne.t-controle.erreur .texte, .ligne.t-critere .texte { font-weight: 650; }
+.ligne.t-detail { padding-left: 30px; }
+.ligne.t-detail .texte { color: var(--orange); }
+/* la vérification en plus (hors score) est à part : violette, jamais orange comme un critère */
+.ligne.t-en_plus, .ligne.t-detail.de-en-plus { border-left-color: var(--violet); }
+.ligne.t-en_plus .texte, .ligne.t-detail.de-en-plus .texte { color: var(--violet); }
+/* la relance ouvre un nouveau passage : un filet la sépare du rapport qui la précède */
+.ligne.t-relance { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--filet); }
+.ligne.t-relance .texte { color: var(--orange); font-weight: 650; }
+
+/* historique */
+.cadre-table { overflow: auto; padding: 0 16px 12px; min-height: 0; flex: 1; }
+table.historique { width: 100%; border-collapse: collapse; font-size: var(--t-corps); }
+.historique th {
+  position: sticky; top: 0;
+  background: var(--rack);
+  text-align: left;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--filet);
+  font-family: var(--police-texte);
+  font-size: var(--t-min);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brume-2);
+}
+.historique td { padding: 7px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); white-space: nowrap; }
+.historique td.num { font-variant-numeric: tabular-nums; text-align: right; color: var(--brume); }
+.historique th.num { text-align: right; }
+.statut-mot { font-weight: 650; }
+.statut-mot.reussi { color: var(--menthe); }
+.statut-mot.echec { color: var(--rose); }
+.statut-mot.bloque_budget { color: var(--orange); }
+/* refusé par le contrôle : rouge si rien ne suit, orange si l'agent reprend avec une relance */
+.statut-mot.refuse_controle { color: var(--rose); }
+.statut-mot.refuse_controle.relance { color: var(--orange); }
+.historique tr.avec-detail td { border-bottom: 0; padding-bottom: 0; }
+.historique tr.detail-controle td { padding-top: 0; padding-bottom: 8px; font-size: var(--t-min); font-weight: 600; color: var(--brume); }
+.historique tr.detail-controle.ok td { color: var(--menthe); }
+.historique tr.detail-controle.relance td { color: var(--orange); }
+.historique tr.detail-controle.refus td { color: var(--rose); }
+.cout-inconnu { color: var(--orange); font-weight: 600; }
+.historique a { color: var(--violet); font-weight: 600; text-decoration-color: rgba(169, 152, 255, 0.45); text-underline-offset: 4px; }
+.historique a:hover { text-decoration-color: currentColor; }
+.historique .faible { color: var(--brume-2); }
+
+/* pied de page et message flottant */
+.pied {
+  display: flex; flex-wrap: wrap; gap: 6px 22px;
+  padding: 10px 28px 14px;
+  border-top: 1px solid var(--filet);
+  font-size: var(--t-min);
+  color: var(--brume-2);
+}
+.pied .connexion { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--brume); }
+.pied .connexion .led { width: 10px; height: 10px; background: var(--menthe); box-shadow: 0 0 0 3px rgba(79, 220, 156, 0.16); }
+.pied .connexion.coupee .led { background: var(--orange); box-shadow: 0 0 0 3px rgba(255, 138, 76, 0.2); }
+
+/* le message flottant se pose au-dessus du pied de page : il ne cache jamais « en direct » */
+.toast {
+  position: fixed; right: 28px; bottom: 76px;
+  z-index: 10; /* au-dessus de la fiche */
+  max-width: min(560px, calc(100vw - 56px));
+  padding: 14px 18px;
+  border-radius: var(--rayon);
+  background: var(--papier);
+  color: var(--nuit);
+  font-size: var(--t-corps);
+  font-weight: 600;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  opacity: 0; pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.toast.visible { opacity: 1; transform: none; }
+
+/* le montant dépensé monte de la ligne de l'agent jusqu'au coût du jour */
+.envol {
+  position: fixed; z-index: 30;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(169, 152, 255, 0.6);
+  background: #262a36;
+  color: var(--papier);
+  font-family: var(--police-chiffres);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: envol 1300ms cubic-bezier(0.45, 0, 0.2, 1) forwards;
+}
+@keyframes envol {
+  0% { opacity: 0; transform: translate(0, 6px) scale(0.9); }
+  15% { opacity: 1; transform: translate(0, -6px) scale(1.03); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.7); }
+}
+.toast.refus { background: var(--orange); }
+
+/* fiche d'un agent : par-dessus la colonne de droite (alertes, journal, historique), la liste reste visible ;
+   tout ce qu'elle montre vient de l'état, rien n'y est calculé */
+.fiche {
+  position: relative; z-index: 5;
+  display: flex; flex-direction: column; gap: 16px;
+  min-height: 0; overflow: auto;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--filet);
+  border-radius: var(--rayon);
+  background: var(--rack-2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  animation: tiroir 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.fiche[hidden] { display: none; }
+.fiche-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.fiche-tete h2 { font-family: var(--police-titre); font-size: 24px; font-weight: 650; letter-spacing: -0.01em; margin-top: 2px; }
+.fiche-fermer {
+  flex: none;
+  width: 36px; height: 36px;
+  border: 1px solid var(--filet); border-radius: var(--rayon-petit);
+  background: transparent; color: var(--brume);
+  font-size: 22px; line-height: 1; cursor: pointer;
+}
+.fiche-fermer:hover { color: var(--papier); border-color: var(--brume-2); }
+.fiche-description { font-size: var(--t-corps); color: var(--brume); }
+/* le déclenchement, bien visible : « Automatique à 07:30 » ou « Manuel » */
+.fiche-declenchement {
+  align-self: flex-start;
+  padding: 4px 14px;
+  border: 1px solid var(--filet); border-radius: 999px;
+  font-size: 16px; font-weight: 650; color: var(--papier);
+}
+.fiche-declenchement.auto { border-color: rgba(169, 152, 255, 0.55); }
+.fiche-donnees { display: grid; gap: 12px; margin: 0; }
+.fiche-donnees > div { display: grid; gap: 3px; }
+.fiche-donnees dd { margin: 0; font-size: var(--t-corps); color: var(--brume); font-variant-numeric: tabular-nums; }
+.fiche-donnees dd.fait { color: var(--papier); }
+.fiche-actions { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--filet); }
+.fiche-ouvrir {
+  display: inline-flex; align-items: center;
+  min-height: 34px; padding: 0 14px;
+  border: 1px solid var(--filet); border-radius: var(--rayon-petit);
+  color: var(--papier); font-weight: 600; text-decoration: none;
+}
+.fiche-ouvrir:hover { border-color: var(--violet); }
+.fiche-ouvrir[hidden] { display: none; }
+
+/* lecteur de résultat : le Markdown de l'agent, mis en forme, dans un tiroir à droite */
+.voile {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(5, 5, 8, 0.66);
+  backdrop-filter: blur(4px);
+}
+.voile[hidden], .lecteur[hidden] { display: none; }
+.lecteur {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 21;
+  width: min(900px, 94vw);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--rack);
+  border-left: 1px solid var(--filet);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.5);
+  animation: tiroir 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes tiroir { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.lecteur-tete {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 24px 32px 18px;
+  border-bottom: 1px solid var(--filet);
+}
+.lecteur-tete h2 { font-family: var(--police-titre); font-size: 22px; font-weight: 650; letter-spacing: -0.01em; margin-top: 4px; overflow-wrap: anywhere; }
+.lecteur-meta { font-size: var(--t-min); color: var(--brume); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.fermer {
+  flex: none;
+  min-height: 36px; padding: 0 14px;
+  border: 1px solid var(--filet); border-radius: var(--rayon-petit);
+  background: var(--rack-2); color: var(--papier);
+  font-size: var(--t-corps); font-weight: 600; cursor: pointer;
+}
+.fermer:hover { border-color: var(--violet); }
+.lecteur-corps { overflow: auto; padding: 24px 32px 40px; line-height: 1.6; }
+.md > * + * { margin-top: 14px; }
+.md h2, .md h3, .md h4, .md h5, .md h6 { font-family: var(--police-titre); letter-spacing: -0.01em; line-height: 1.2; }
+.md h2 { font-size: 22px; font-weight: 650; color: var(--papier); }
+.md h3 { font-size: 18px; font-weight: 650; color: var(--papier); padding-top: 8px; }
+.md h4, .md h5, .md h6 { font-size: 16px; color: var(--violet); }
+.md p, .md li { font-size: var(--t-corps); color: var(--papier); }
+.md ul, .md ol { padding-left: 24px; display: grid; gap: 6px; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md li::marker { color: var(--violet); }
+.md strong { color: var(--papier); font-weight: 700; }
+.md em { color: var(--brume); }
+.md code { font-family: var(--police-donnees); font-size: var(--t-min); padding: 1px 6px; border-radius: 5px; background: rgba(242, 240, 235, 0.08); }
+.md a { color: var(--violet); }
+.md hr { border: 0; border-top: 1px solid var(--filet); }
+.md blockquote { padding: 10px 16px; border-left: 3px solid var(--violet); background: rgba(169, 152, 255, 0.06); border-radius: 0 8px 8px 0; color: var(--papier); font-size: var(--t-corps); }
+.md-table { overflow-x: auto; border: 1px solid var(--filet); border-radius: var(--rayon-petit); }
+.md table { width: 100%; border-collapse: collapse; font-size: var(--t-min); font-variant-numeric: tabular-nums; }
+.md th { text-align: left; padding: 8px 12px; background: var(--rack-2); color: var(--brume-2); font-family: var(--police-texte); font-size: var(--t-min); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px solid var(--filet); }
+.md td { padding: 8px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); vertical-align: top; }
+.md tbody tr:nth-child(even) td { background: rgba(242, 240, 235, 0.02); }
+
+/* le verdict du contrôle, en tête du lecteur : le score en grand, puis chaque critère réussi ou raté avec sa raison.
+   C'est l'image que la vidéo montre le plus longtemps : sobre, grande, lisible de loin. */
+.verdict {
+  border: 1px solid var(--filet);
+  border-radius: var(--rayon);
+  background: var(--rack-2);
+  box-shadow: inset 4px 0 0 var(--gris);
+  overflow: hidden;
+}
+.verdict.ok { box-shadow: inset 4px 0 0 var(--menthe); }
+.verdict.relance { box-shadow: inset 4px 0 0 var(--orange); }
+.verdict.refus { box-shadow: inset 4px 0 0 var(--rose); }
+.verdict-tete { display: flex; align-items: center; gap: 24px; padding: 18px 24px 16px; border-bottom: 1px solid var(--filet); }
+.verdict-score {
+  flex: none;
+  font-family: var(--police-chiffres);
+  font-variant-numeric: tabular-nums;
+  font-size: 72px;
+  font-weight: 700;
+  line-height: 1;
+}
+.verdict.ok .verdict-score { color: var(--menthe); }
+.verdict.relance .verdict-score { color: var(--orange); }
+.verdict.refus .verdict-score { color: var(--rose); }
+.verdict-titre { display: grid; gap: 2px; min-width: 0; }
+.verdict-titre strong { font-family: var(--police-titre); font-size: 30px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.1; color: var(--papier); }
+.verdict-suite { font-size: 19px; color: var(--brume); }
+.verdict .verdict-criteres { display: grid; gap: 0; margin: 0; padding: 4px 0; list-style: none; }
+.verdict .critere {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  column-gap: 16px;
+  align-items: start;
+  padding: 12px 24px;
+}
+.verdict .critere + .critere { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.verdict .critere-texte { display: grid; gap: 3px; min-width: 0; }
+.verdict .critere-texte strong { font-family: var(--police-titre); font-size: 22px; font-weight: 650; line-height: 1.2; color: var(--papier); overflow-wrap: anywhere; }
+.verdict .constats { display: grid; gap: 1px; }
+.verdict .constat { font-size: var(--t-corps); line-height: 1.4; color: var(--brume); overflow-wrap: anywhere; }
+.verdict .critere.rate .constat { color: var(--papier); }
+.verdict .etat { padding-top: 3px; font-family: var(--police-texte); font-size: 17px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+.verdict .critere.ok .etat { color: var(--menthe); }
+.verdict .critere.rate .etat { color: var(--rose); }
+.verdict .critere.plus .etat { color: var(--violet); }
+.verdict .critere.signal .etat { color: var(--orange); }
+/* la marque est dessinée (cercle, coche ou croix) : elle ne dépend d'aucune police */
+.verdict .marque { position: relative; width: 30px; height: 30px; margin-top: 1px; border-radius: 50%; }
+.verdict .marque::before, .verdict .marque::after { content: ""; position: absolute; }
+.verdict .critere.ok .marque { background: rgba(79, 220, 156, 0.14); box-shadow: inset 0 0 0 2px var(--menthe); }
+.verdict .critere.ok .marque::after { left: 10px; top: 4px; width: 8px; height: 15px; border: solid var(--menthe); border-width: 0 3px 3px 0; transform: rotate(45deg); }
+.verdict .critere.rate .marque { background: rgba(255, 92, 122, 0.14); box-shadow: inset 0 0 0 2px var(--rose); }
+.verdict .critere.rate .marque::before, .verdict .critere.rate .marque::after { left: 7px; top: 13px; width: 16px; height: 3px; border-radius: 2px; background: var(--rose); }
+.verdict .critere.rate .marque::before { transform: rotate(45deg); }
+.verdict .critere.rate .marque::after { transform: rotate(-45deg); }
+.verdict .critere.plus .marque { background: rgba(169, 152, 255, 0.12); box-shadow: inset 0 0 0 2px var(--violet); }
+.verdict .critere.plus .marque::before { left: 7px; top: 13px; width: 16px; height: 3px; border-radius: 2px; background: var(--violet); }
+.verdict .critere.plus .marque::after { left: 13px; top: 7px; width: 3px; height: 16px; border-radius: 2px; background: var(--violet); }
+.verdict .critere.signal .marque { box-shadow: inset 0 0 0 2px var(--orange); }
+.verdict .critere.signal .marque::before, .verdict .critere.signal .marque::after { background: var(--orange); }
+.verdict-plus { border-top: 1px solid var(--filet); padding: 10px 0 4px; }
+.verdict-plus > .etiquette { display: block; padding: 0 24px 2px; }
+
+/* ------------------------------------------------------------------ une seule hauteur d'écran sur grand écran */
+
+@media (min-width: 1810px) and (min-height: 900px) {
+  body { height: 100vh; overflow: hidden; }
+  .poste { overflow: hidden; }
+  .panneau { overflow: hidden; }
+}
+
+/* ------------------------------------------------------------------ 1500 px et plus : la liste des agents sur toute la hauteur */
+
+@media (min-width: 1500px) {
+  /* dix agents tiennent sans défiler : la liste occupe toute la hauteur à gauche ; à droite : alertes, journal, historique */
+  .colonne { display: contents; }
+  .poste {
+    grid-template-rows: auto minmax(0, 1.25fr) minmax(0, 1fr);
+    grid-template-areas: "agents alertes" "agents journal" "agents historique";
+  }
+  .panneau-agents { grid-area: agents; }
+  .panneau-alertes { grid-area: alertes; max-height: 190px; }
+  .panneau-journal { grid-area: journal; }
+  .panneau-historique { grid-area: historique; }
+  .fiche { grid-column: 2; grid-row: 1 / 4; }
+  /* chaque ligne prend la hauteur de son contenu ; la ligne « ce qu'il a fait » (ou la description) tient sur deux
+     lignes au plus, pour qu'un bilan de 60 à 70 caractères se lise en entier au zoom de tournage (120 %) ;
+     le texte complet reste dans l'infobulle */
+  .strips { gap: 0; padding-top: 4px; padding-bottom: 8px; grid-auto-rows: minmax(min-content, 64px); }
+  .strip { min-height: 0; padding: 6px 0; }
+  .strip .rail { margin: 10px 0; }
+  .strip small { line-height: 1.25; }
+  .heure { font-size: 21px; line-height: 1; }
+  .mot-statut { line-height: 1.25; }
+  .strip-nom span { -webkit-line-clamp: 2; line-clamp: 2; }
+  /* la colonne du lien « Ouvrir » ne prend que la place de son texte */
+  .historique th:nth-child(6), .historique td:nth-child(6) { width: 1%; }
+  /* la raison d'un refus pour budget est déjà dans l'alerte : dans le tableau, elle le ferait dépasser à droite */
+  .historique td:nth-child(6) .faible { display: none; }
+}
+
+/* ------------------------------------------------------------------ 1500 à 1809 px : zoom 125 % sur un écran 1920×1080 */
+
+@media (min-width: 1500px) and (max-width: 1809px) {
+  :root {
+    --t-hero: 40px;
+    --col-droite: 528px;
+    /* chaque colonne a la largeur de son texte le plus long (mesurée à 16 px) ; le nom prend le reste : 266 px à 1536 px de large.
+       Neuf agents, sans contrôle : le statut tient « budget du jour » ; le coût tient « 0,13 € / 0,60 € » en DIN (150 px) */
+    --colonnes-strip: 12px minmax(200px, 1fr) 138px 104px 100px 156px 94px;
+    --espace: 14px;
+  }
+  .entete { grid-template-columns: 240px auto minmax(280px, 1fr) auto; gap: 22px; padding: 8px 16px; }
+  .marque h1 { font-size: 19px; }
+  .palette { min-width: 30px; }
+  .palette.separateur { min-width: 11px; }
+  .palette.devise { min-width: 28px; }
+  .budget-chiffres { gap: 26px; }
+  .voyant { width: 78px; padding: 5px 4px; }
+  .poste { padding: var(--espace) 16px; }
+  .entete-strips, .strip { column-gap: 6px; }
+  /* les lignes de la liste : dix agents tiennent sans défiler à 1536 x 864 */
+  .strips { gap: 0; padding-top: 2px; padding-bottom: 6px; padding-right: 12px; grid-auto-rows: minmax(min-content, 56px); }
+  .strip { padding: 4px 0; }
+  .strip .rail { margin: 9px 0; }
+  .strip-nom strong { font-size: 17px; }
+  .strip small { line-height: 1.25; }
+  .heure { font-size: 19px; line-height: 1; }
+  .strip-cout { gap: 4px; }
+  .mot-statut { font-size: var(--t-corps); line-height: 1.25; }
+  .lancer { min-height: 32px; padding: 0 6px; gap: 6px; font-size: var(--t-min); }
+  .panneau > h2 { padding: 11px 16px 8px; }
+  .ligne { grid-template-columns: 82px 90px 1fr; column-gap: 8px; }
+  .ligne .puce { padding: 0 6px; }
+  /* historique : sans la durée (visible dans le journal), le statut « Refusé par le contrôle » tient sur une ligne :
+     rien ne dépasse à droite */
+  .cadre-table { padding: 0 8px 8px; }
+  table.historique { font-size: var(--t-min); }
+  .historique th, .historique td { padding-left: 4px; padding-right: 4px; }
+  .historique th { letter-spacing: 0.04em; }
+  .historique th:nth-child(3), .historique td:nth-child(3) { display: none; }
+  .historique td:nth-child(5) { white-space: normal; }
+  /* le message flottant reste dans la colonne de droite : il ne recouvre jamais le bouton qu'on vient de cliquer */
+  .toast { max-width: 460px; }
+  .pied { padding: 8px 16px 10px; }
+  .vide { padding: 8px 16px; }
+}
+@media (min-width: 1500px) and (max-width: 1809px) and (min-height: 700px) {
+  body { height: 100vh; overflow: hidden; }
+  .poste { overflow: hidden; }
+  .panneau { overflow: hidden; }
+}
+
+@media (min-width: 1810px) {
+  /* 1920×1080 à 100 % : l'historique perd sa durée (elle est dans le journal et dans la fiche) */
+  .historique th:nth-child(3), .historique td:nth-child(3) { display: none; }
+}
+
+/* ------------------------------------------------------------------ moins de 1500 px : une seule colonne */
+
+@media (max-width: 1499px) {
+  .entete { grid-template-columns: 1fr; gap: 14px; }
+  .fiche { position: fixed; left: 16px; right: 16px; bottom: 16px; max-height: 80vh; z-index: 15; }
+  .annonciateurs { flex-wrap: wrap; }
+  .poste { grid-template-columns: minmax(0, 1fr); }
+  .colonne.gauche, .colonne.droite { grid-template-rows: none; grid-template-columns: minmax(0, 1fr); }
+  .panneau { min-height: 280px; }
+  .entete-strips { display: none; }
+  .strip {
+    grid-template-columns: 12px 1fr 1fr;
+    row-gap: 12px;
+    padding: 12px 0;
+  }
+  .strip .rail { grid-row: 1 / span 4; margin: -12px 0; }
+  .strip-nom { grid-column: 2 / 4; }
+  .strip-statut { grid-column: 2; }
+  .strip-dernier { grid-column: 3; }
+  .strip-prochain { grid-column: 2; }
+  .strip-cout { grid-column: 3; }
+  .strip .lancer { grid-column: 2 / 4; }
+  .ligne { grid-template-columns: 82px 88px 1fr; }
+}
+@media (max-width: 700px) {
+  :root { --t-hero: 40px; }
+  .entete { padding: 12px 16px; }
+  .poste { padding: 12px 16px; }
+  .palette { min-width: 28px; }
+  .palette.separateur { min-width: 10px; }
+  .palette.devise { min-width: 26px; }
+  .voyant { width: calc((100% - 20px) / 3); }
+  .budget-chiffres { gap: 20px; }
+  .alerte { grid-template-columns: 1fr; gap: 4px; }
+  .ligne { grid-template-columns: 1fr; }
+  .ligne time, .ligne .puce { display: inline-block; }
+  .pied { padding: 10px 16px 14px; }
+  .toast { right: 16px; left: 16px; max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
