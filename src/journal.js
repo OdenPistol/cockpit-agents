@@ -13,6 +13,9 @@
 //   modele, source_cle, version_claude   lus dans l'événement « init » de Claude Code
 //   bilan                 ce qu'a fait un passage réussi, en une ligne écrite par l'agent (voir bilan.js) ; null sinon
 //   etapes                les lignes du journal en direct de ce passage (les 80 dernières), que l'écran remontre au repos
+//   verification          passage du Juge seulement : { agent, sortie, sortie_sha256, verdict } = l'agent vérifié, la sortie jugée,
+//                         l'empreinte de son contenu au lancement (le verdict ne vaut que pour ce contenu) et le fichier de verdict attendu
+//   relance_corrections   passage d'un agent relancé avec les corrections du Juge seulement : { verdict }
 
 import fs from 'node:fs';
 import path from 'node:path';

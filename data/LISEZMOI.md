@@ -6,4 +6,6 @@
 - Les numéros de téléphone appartiennent à la plage que les opérateurs réservent à la fiction.
 - Chaque fichier le dit lui-même : champ `fictif` dans les e-mails et les factures, première ligne « fictif » dans les textes.
 
+Une erreur est plantée exprès dans `factures/factures.csv`, comme les emails piégés de `emails/inbox.jsonl` : le total TTC de la facture F-2026-0079 est faux (1650,00 au lieu de 1560,00). C'est ce que le Juge doit attraper en vérifiant le travail de l'agent Factures.
+
 Les agents lisent ces fichiers et n'y écrivent jamais. Pour les remplacer par tes propres données, garde les mêmes noms de fichiers et le même format.

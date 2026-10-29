@@ -1,6 +1,6 @@
 {
   "name": "cockpit-agents",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Un cockpit local pour lancer des agents Claude Code, suivre leur journal en direct, leur coût du jour et leurs alertes.",
   "type": "module",
   "private": true,

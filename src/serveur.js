@@ -3,6 +3,8 @@
 //   GET  /api/etat                  l'état complet en JSON
 //   GET  /api/evenements            flux Server-Sent Events : « etat » (état complet) et « ligne » (journal en direct)
 //   POST /api/agents/<id>/lancer    lance un agent (refusé si le budget ou un autre passage l'interdit)
+//   POST /api/agents/<id>/verifier  lance le Juge sur la dernière sortie de l'agent <id> (qui doit avoir un dod.md)
+//   POST /api/agents/<id>/relancer-avec-corrections   relance l'agent <id> après un rejet du Juge, avec ses corrections
 //   GET  /out/<agent>/<fichier>     ouvre un résultat en texte brut
 //
 // Protections, sans authentification (c'est un outil local) :
@@ -15,6 +17,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { ID_JUGE } from './juge.js';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -163,8 +166,10 @@ export function demarrerServeur({ cockpit, config, racine, intervalleEtatMs = 50
         return undefined;
       }
 
-      const lancement = /^\/api\/agents\/([a-z0-9-]+)\/lancer$/.exec(chemin);
-      if (req.method === 'POST' && lancement) {
+      // Trois gestes, tous à la demande d'un clic (jamais en boucle) : lancer un agent, lancer le Juge sur un agent,
+      // relancer un agent rejeté avec les corrections du Juge. Mêmes protections pour les trois.
+      const action = /^\/api\/agents\/([a-z0-9-]+)\/(lancer|verifier|relancer-avec-corrections)$/.exec(chemin);
+      if (req.method === 'POST' && action) {
         if (req.headers['x-cockpit'] !== '1') {
           return repondreJson(res, 403, { ok: false, message: 'Requête refusée : en-tête X-Cockpit manquant.' });
         }
@@ -173,8 +178,11 @@ export function demarrerServeur({ cockpit, config, racine, intervalleEtatMs = 50
           return repondreJson(res, 403, { ok: false, message: 'Requête refusée : origine étrangère.' });
         }
         req.resume();
-        const r = cockpit.lancer(lancement[1], 'manuel');
-        if (r.ok) return repondreJson(res, 202, { ok: true, agent: lancement[1] });
+        const [, id, geste] = action;
+        const r = geste === 'lancer' ? cockpit.lancer(id, 'manuel')
+          : geste === 'verifier' ? cockpit.verifier(id)
+            : cockpit.relancerAvecCorrections(id);
+        if (r.ok) return repondreJson(res, 202, { ok: true, agent: geste === 'verifier' ? ID_JUGE : id });
         const statut = r.code === 'inconnu' ? 404 : r.code === 'agent_invalide' ? 422 : 409;
         return repondreJson(res, statut, { ok: false, code: r.code, message: r.message, conseil: r.conseil });
       }

@@ -318,6 +318,59 @@ function majStrip(li, agent) {
   bouton.setAttribute('aria-label', `Lancer l'agent ${agent.nom}`);
   li.querySelector('.strip-nom').setAttribute('aria-label', `Ouvrir la fiche de ${agent.nom}`);
   li.classList.toggle('choisie', agent.id === ficheId);
+  majVerification(li, agent);
+}
+
+// Sous un agent qui a une definition of done : où en est sa vérification par le Juge. Le texte vient tel quel de l'état
+// (« Vérifié par le Juge : accepté », « Rejeté : 2 corrections »…) ; un clic sur le statut ouvre le verdict ; le bouton à côté
+// lance le Juge, ou relance l'agent avec les corrections. Rien ne part sans un clic.
+function actionVerification(v) {
+  if (v.peut_relancer) return { geste: 'relancer-avec-corrections', texte: 'Relancer avec les corrections' };
+  if (v.peut_verifier) return { geste: 'verifier', texte: v.etat === 'a_verifier' ? 'Lancer le Juge' : 'Relancer le Juge' };
+  return null;
+}
+
+function majVerification(li, agent) {
+  const v = agent.verification;
+  let zone = li.querySelector(':scope > .verif');
+  li.classList.toggle('avec-verif', Boolean(v));
+  if (!v) {
+    zone?.remove();
+    return;
+  }
+  if (!zone) {
+    zone = el('div', 'verif');
+    const statut = el('button', 'verif-statut');
+    statut.type = 'button';
+    statut.append(el('i', 'verif-led'), el('b'));
+    statut.addEventListener('click', () => {
+      const courant = etat?.agents.find((a) => a.id === li.dataset.id);
+      if (courant?.verification?.verdict) ouvrirVerdict(courant, statut);
+      else ouvrirFiche(li.dataset.id);
+    });
+    const action = el('button', 'verif-action');
+    action.type = 'button';
+    action.addEventListener('click', () => agir(li.dataset.id, action.dataset.geste, action));
+    zone.append(statut, action);
+    // un clic dans cette zone n'ouvre pas la fiche de l'agent : il a son propre effet
+    zone.addEventListener('click', (evenement) => evenement.stopPropagation());
+    // à côté du nom (et non dedans : le nom est un bouton, et des boutons ne s'emboîtent pas), juste après lui dans l'ordre de tabulation
+    li.querySelector('.strip-nom').after(zone);
+  }
+  zone.dataset.etat = v.etat;
+  const statut = zone.querySelector('.verif-statut');
+  fixer(statut.querySelector('b'), v.texte);
+  statut.title = v.detail ?? (v.verdict ? 'Ouvrir le verdict du Juge' : '');
+  statut.classList.toggle('ouvre', Boolean(v.verdict));
+  statut.setAttribute('aria-label', v.verdict ? `${v.texte}. Ouvrir le verdict du Juge` : v.texte);
+  const action = zone.querySelector('.verif-action');
+  const geste = actionVerification(v);
+  action.hidden = geste === null;
+  if (geste) {
+    action.dataset.geste = geste.geste;
+    fixer(action, geste.texte);
+    action.setAttribute('aria-label', `${geste.texte} : ${agent.nom}`);
+  }
 }
 
 function rendreAgents(e) {
@@ -600,6 +653,8 @@ function construireMarkdown(blocs) {
 let lienOrigine = null;
 async function ouvrirResultat(lien, h) {
   lienOrigine = lien;
+  verdictOuvert = null;
+  $('lecteur-corps').classList.remove('avec-verdict');
   fixer($('lecteur-agent'), h.agent_nom);
   fixer($('lecteur-titre'), h.resultat.split('/').pop());
   fixer($('lecteur-meta'), `${libelleJour(h.debut)}, ${hhmm(h.debut)} · ${duree(h.duree_ms)} · ${h.cout_eur === null ? 'coût inconnu' : eur(h.cout_eur, 3)}`);
@@ -619,11 +674,113 @@ async function ouvrirResultat(lien, h) {
   }
 }
 function fermerResultat() {
+  verdictOuvert = null;
   $('lecteur').hidden = true;
   $('voile').hidden = true;
   document.body.classList.remove('lecture');
   lienOrigine?.focus();
 }
+// Le verdict du Juge, dans le même tiroir : le score en grand, chaque critère OK ou en écart, puis les corrections numérotées avec
+// leur preuve. Seulement du texte posé par textContent. Un rejet attend une décision : « Relancer avec les corrections » ou rien.
+let verdictOuvert = null; // { id, chemin, relance } : le verdict affiché, pour le remettre à jour ou le fermer quand l'état change
+
+function construireVerdict(agent) {
+  const v = agent.verification;
+  const d = v.verdict;
+  const accepte = d.verdict === 'accepte';
+  // un rejet : les critères respectés tiennent sur une ligne (le texte complet est dans l'infobulle), pour que l'écart, sa correction
+  // et sa preuve restent à l'écran
+  const bloc = el('div', accepte ? 'verdict-page' : 'verdict-page rejete');
+
+  const carte = el('section', `verdict ${accepte ? 'ok' : 'refus'}`);
+  const tete = el('div', 'verdict-tete');
+  const titre = el('div', 'verdict-titre');
+  titre.append(
+    el('strong', undefined, accepte ? 'Accepté' : 'Rejeté'),
+    el('span', 'verdict-suite', accepte ? 'tous les critères sont respectés' : `${compte(d.corrections.length, 'correction')} à faire`),
+  );
+  tete.append(el('div', 'verdict-score', `${d.criteres.filter((c) => c.ok).length}/${d.criteres.length}`), titre);
+  const criteres = el('ul', 'verdict-criteres');
+  for (const c of d.criteres) {
+    const li = el('li', `critere ${c.ok ? 'ok' : 'rate'}`);
+    const texte = el('div', 'critere-texte');
+    const intitule = el('strong', undefined, `${c.n}. ${c.texte}`);
+    intitule.title = c.texte;
+    texte.append(intitule);
+    li.append(el('span', 'marque'), texte, el('span', 'etat', c.ok ? 'OK' : 'Écart'));
+    criteres.append(li);
+  }
+  carte.append(tete, criteres);
+  bloc.append(carte);
+
+  if (d.corrections.length > 0) {
+    const corrections = el('section', 'verdict-corrections');
+    corrections.append(el('span', 'etiquette', 'Corrections demandées'));
+    const liste = el('ol', 'corrections-liste');
+    for (const c of d.corrections) {
+      const li = el('li', 'correction');
+      li.append(el('strong', undefined, c.texte), el('p', 'preuve', `Preuve : ${c.preuve}`));
+      liste.append(li);
+    }
+    corrections.append(liste);
+    bloc.append(corrections);
+  }
+
+  const actions = el('div', 'verdict-actions');
+  if (v.peut_relancer) {
+    const relancer = el('button', 'verdict-relance', 'Relancer avec les corrections');
+    relancer.type = 'button';
+    // le tiroir se ferme d'abord : le journal en direct montre l'agent qui repart
+    relancer.addEventListener('click', () => {
+      fermerResultat();
+      agir(agent.id, 'relancer-avec-corrections', relancer);
+    });
+    const rien = el('button', 'verdict-rien', 'Ne rien faire');
+    rien.type = 'button';
+    rien.addEventListener('click', fermerResultat);
+    actions.append(relancer, rien);
+  }
+  const brut = el('a', 'verdict-brut', 'Voir le fichier du verdict');
+  brut.href = `/${d.chemin.split('/').map(encodeURIComponent).join('/')}`;
+  brut.target = '_blank';
+  brut.rel = 'noopener';
+  actions.append(brut);
+  bloc.append(actions);
+  return bloc;
+}
+
+function ouvrirVerdict(agent, origine) {
+  const d = agent.verification?.verdict;
+  if (!d) return;
+  lienOrigine = origine;
+  verdictOuvert = { id: agent.id, chemin: d.chemin, relance: agent.verification.peut_relancer };
+  fixer($('lecteur-agent'), 'Juge');
+  fixer($('lecteur-titre'), `Verdict sur ${agent.nom}`);
+  fixer($('lecteur-meta'), `${libelleJour(d.debut)}, ${hhmm(d.debut)} · ${duree(d.duree_ms)} · ${d.cout_eur === null ? 'coût inconnu' : eur(d.cout_eur, 3)}`);
+  const corps = $('lecteur-corps');
+  corps.classList.add('avec-verdict');
+  corps.replaceChildren(construireVerdict(agent));
+  corps.scrollTop = 0;
+  $('voile').hidden = false;
+  $('lecteur').hidden = false;
+  document.body.classList.add('lecture');
+  $('lecteur-fermer').focus();
+}
+
+// L'état change pendant que le verdict est ouvert : le même verdict se remet à jour (le bouton de relance disparaît dès que
+// l'agent repart), un autre verdict, ou plus de verdict, ferme le tiroir.
+function rafraichirVerdict(e) {
+  if (!verdictOuvert) return;
+  const agent = e.agents.find((a) => a.id === verdictOuvert.id);
+  const d = agent?.verification?.verdict;
+  if (!d || d.chemin !== verdictOuvert.chemin) {
+    fermerResultat();
+  } else if (agent.verification.peut_relancer !== verdictOuvert.relance) {
+    verdictOuvert.relance = agent.verification.peut_relancer;
+    $('lecteur-corps').replaceChildren(construireVerdict(agent));
+  }
+}
+
 $('lecteur-fermer').addEventListener('click', fermerResultat);
 $('voile').addEventListener('click', fermerResultat);
 document.addEventListener('keydown', (evenement) => {
@@ -650,6 +807,8 @@ function contenuFiche(agent, f) {
       : 'jamais lancé',
     resultat,
     peutOuvrir: Boolean(agent.dernier_resultat),
+    verification: agent.verification ? agent.verification.texte : null,
+    peutOuvrirVerdict: Boolean(agent.verification?.verdict),
   };
 }
 
@@ -680,6 +839,9 @@ function rendreFiche() {
   const ouvrir = $('fiche-ouvrir');
   ouvrir.hidden = !c.peutOuvrir;
   if (c.peutOuvrir) ouvrir.setAttribute('href', `/${agent.dernier_resultat.split('/').map(encodeURIComponent).join('/')}`);
+  $('fiche-verif-bloc').hidden = c.verification === null;
+  fixer($('fiche-verif'), c.verification ?? '');
+  $('fiche-verdict').hidden = !c.peutOuvrirVerdict;
   const bouton = $('fiche-lancer');
   bouton.disabled = agent.statut === 'en_cours' || agent.invalide;
   fixer(bouton, agent.statut === 'en_cours' ? 'En cours' : 'Lancer');
@@ -711,6 +873,10 @@ $('fiche-lancer').addEventListener('click', () => {
   const id = ficheId;
   fermerFiche();
   lancer(id, strips.get(id).querySelector('.lancer'));
+});
+$('fiche-verdict').addEventListener('click', () => {
+  const agent = etat?.agents.find((a) => a.id === ficheId);
+  if (agent?.verification?.verdict) ouvrirVerdict(agent, $('fiche-verdict'));
 });
 $('fiche-ouvrir').addEventListener('click', (evenement) => {
   const agent = etat?.agents.find((a) => a.id === ficheId);
@@ -777,6 +943,7 @@ function rendre(e) {
   rendreHistorique(e);
   rendreRepos(e);
   rendrePied(e);
+  rafraichirVerdict(e);
   premierRendu = false;
 }
 
@@ -791,10 +958,11 @@ function toast(message, type = 'ok') {
   minuterieToast = setTimeout(() => noeud.classList.remove('visible'), 7000);
 }
 
-async function lancer(id, bouton) {
+// Un geste, un clic : « lancer » un agent, « verifier » (lance le Juge sur cet agent) ou « relancer-avec-corrections ».
+async function agir(id, geste, bouton) {
   bouton.disabled = true;
   try {
-    const reponse = await fetch(`/api/agents/${encodeURIComponent(id)}/lancer`, { method: 'POST', headers: { 'X-Cockpit': '1' } });
+    const reponse = await fetch(`/api/agents/${encodeURIComponent(id)}/${geste}`, { method: 'POST', headers: { 'X-Cockpit': '1' } });
     const corps = await reponse.json().catch(() => ({}));
     if (!reponse.ok) {
       fermerFiche(); // un refus se lit dans l'alerte et le journal, que la fiche couvrirait
@@ -808,6 +976,10 @@ async function lancer(id, bouton) {
       if (agent && agent.statut !== 'en_cours') bouton.disabled = false;
     }
   }
+}
+
+function lancer(id, bouton) {
+  return agir(id, 'lancer', bouton);
 }
 
 /* ------------------------------------------------------------------ connexion en direct (Server-Sent Events) */

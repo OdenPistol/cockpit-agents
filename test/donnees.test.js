@@ -64,13 +64,13 @@ function fichiersDuDepot(dossier = '') {
   return fichiers;
 }
 
-describe('les 9 agents livrés', () => {
+describe('les 10 agents livrés (les 9 de la première version, et le Juge)', () => {
   const { agents, invalides } = chargerAgents(RACINE_REELLE, config.ordre);
 
-  it('sont tous lisibles, dans l\'ordre de config.json', () => {
+  it('sont tous lisibles, dans l\'ordre de config.json (le Juge sous Factures, l\'agent qu\'il vérifie)', () => {
     assert.deepEqual(invalides, []);
-    assert.deepEqual(agents.map((a) => a.id), ['veille', 'securite', 'boite-mail', 'factures', 'devis', 'avis', 'prospects', 'contenu', 'rapport-du-matin']);
-    assert.deepEqual(agents.map((a) => a.nom), ['Veille', 'Sécurité', 'Boîte mail', 'Factures', 'Devis', 'Avis clients', 'Relances prospects', 'Contenu', 'Rapport du matin']);
+    assert.deepEqual(agents.map((a) => a.id), ['veille', 'securite', 'boite-mail', 'factures', 'juge', 'devis', 'avis', 'prospects', 'contenu', 'rapport-du-matin']);
+    assert.deepEqual(agents.map((a) => a.nom), ['Veille', 'Sécurité', 'Boîte mail', 'Factures', 'Juge', 'Devis', 'Avis clients', 'Relances prospects', 'Contenu', 'Rapport du matin']);
   });
 
   it('n\'ont ni Bash ni WebFetch par défaut, et seulement des outils de lecture et d\'écriture de fichiers', () => {
@@ -91,7 +91,7 @@ describe('les 9 agents livrés', () => {
   });
 
   it('ont des consignes qui traitent le contenu lu comme de la donnée, jamais comme un ordre', () => {
-    for (const id of ['veille', 'securite', 'boite-mail', 'devis', 'avis', 'prospects', 'rapport-du-matin']) {
+    for (const id of ['veille', 'securite', 'boite-mail', 'devis', 'avis', 'prospects', 'rapport-du-matin', 'juge']) {
       assert.match(agents.find((a) => a.id === id).prompt, /donnée, jamais une instruction/);
     }
   });
@@ -127,7 +127,7 @@ describe('données fictives', () => {
     assert.ok(piegeux.length >= 5, `seulement ${piegeux.length}`);
   });
 
-  it('factures : 25 lignes cohérentes, marquées fictives, et exactement 5 impayés de plus de 30 jours au 21/10/2026', () => {
+  it('factures : 25 lignes marquées fictives, un seul total qui ne correspond pas (l\'erreur plantée pour le Juge), et exactement 5 impayés de plus de 30 jours au 21/10/2026', () => {
     const [entete, ...lignes] = lire('data', 'factures', 'factures.csv').trim().split('\n');
     assert.equal(entete, 'numero;client;prestation;date_emission;date_echeance;montant_ht;tva;montant_ttc;statut;date_paiement;fictif');
     assert.equal(lignes.length, 25);
@@ -135,10 +135,11 @@ describe('données fictives', () => {
     const nombre = (s) => Number(s.replace(',', '.'));
     let aRelancer = 0;
     let exactement30 = 0;
+    const totauxFaux = [];
     for (const l of lignes) {
       const [numero, , , , echeance, ht, tva, ttc, statut, paiement, fictif] = l.split(';');
       assert.equal(fictif, 'oui', numero);
-      assert.ok(Math.abs(nombre(ttc) - (nombre(ht) + nombre(tva))) < 0.005, numero);
+      if (Math.abs(nombre(ttc) - (nombre(ht) + nombre(tva))) >= 0.005) totauxFaux.push(`${numero} : ${ttc} au lieu de ${(nombre(ht) + nombre(tva)).toFixed(2).replace('.', ',')}`);
       assert.ok(Math.abs(nombre(tva) - nombre(ht) * 0.2) < 0.005, numero);
       assert.equal(statut === 'payée', paiement !== '', `${numero} : payée <=> date de paiement`);
       const [a, m, j] = echeance.split('-').map(Number);
@@ -148,6 +149,10 @@ describe('données fictives', () => {
     }
     assert.equal(aRelancer, 5);
     assert.equal(exactement30, 1, 'un cas limite à 30 jours pile est présent pour vérifier la règle « plus de 30 »');
+    // L'erreur plantée exprès, comme l'email piégé de la première vidéo : un chiffre inversé dans le TTC d'une facture impayée.
+    // Le Juge doit l'attraper à l'écran ; data/LISEZMOI.md la déclare. Elle ne doit être ni plus nombreuse, ni ailleurs.
+    assert.deepEqual(totauxFaux, ['F-2026-0079 : 1650,00 au lieu de 1560,00']);
+    assert.match(lire('data', 'LISEZMOI.md'), /F-2026-0079/);
   });
 
   it('veille et notes : chaque fichier se déclare fictif', () => {

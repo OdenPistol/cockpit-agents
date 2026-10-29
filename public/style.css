@@ -731,7 +731,9 @@ table.historique { width: 100%; border-collapse: collapse; font-size: var(--t-co
   display: inline-flex; align-items: center;
   min-height: 34px; padding: 0 14px;
   border: 1px solid var(--filet); border-radius: var(--rayon-petit);
+  background: transparent;
   color: var(--papier); font-weight: 600; text-decoration: none;
+  cursor: pointer;
 }
 .fiche-ouvrir:hover { border-color: var(--violet); }
 .fiche-ouvrir[hidden] { display: none; }
@@ -855,6 +857,106 @@ table.historique { width: 100%; border-collapse: collapse; font-size: var(--t-co
 .verdict-plus { border-top: 1px solid var(--filet); padding: 10px 0 4px; }
 .verdict-plus > .etiquette { display: block; padding: 0 24px 2px; }
 
+/* ------------------------------------------------------------------ le Juge : sa ligne sous l'agent vérifié, son verdict */
+
+/* sous l'agent qui a une definition of done : où en est sa vérification (accepté, rejeté, à vérifier…), cliquable pour ouvrir
+   le verdict ; à côté, l'action (lancer le Juge, relancer avec les corrections). La couleur dit l'état, comme pour les statuts. */
+.verif { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; margin-top: 5px; cursor: default; }
+.verif-statut {
+  display: inline-flex; align-items: center; gap: 8px;
+  max-width: 100%;
+  min-height: 26px; padding: 0 12px 0 10px;
+  border: 1px solid var(--filet); border-radius: 999px;
+  background: transparent; color: var(--brume);
+  font-size: var(--t-min); font-weight: 650; line-height: 1.2; text-align: left;
+  cursor: default;
+}
+.verif-statut b { font-weight: 650; }
+.verif-statut.ouvre { cursor: pointer; }
+.verif-statut.ouvre::after { content: "\203A"; margin-left: 2px; font-size: 18px; line-height: 1; }
+.verif-statut.ouvre:hover { background: rgba(242, 240, 235, 0.08); }
+.verif-led { flex: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.verif[data-etat="a_verifier"] .verif-statut { color: var(--papier); }
+.verif[data-etat="sans_sortie"] .verif-statut { color: var(--brume-2); border-style: dashed; }
+.verif[data-etat="accepte"] .verif-statut { color: var(--menthe); border-color: rgba(79, 220, 156, 0.5); background: rgba(79, 220, 156, 0.09); }
+.verif[data-etat="rejete"] .verif-statut { color: var(--rose); border-color: rgba(255, 92, 122, 0.55); background: rgba(255, 92, 122, 0.1); }
+.verif[data-etat="en_cours"] .verif-statut { color: var(--bleu); border-color: rgba(110, 162, 255, 0.5); background: rgba(110, 162, 255, 0.09); }
+.verif[data-etat="en_cours"] .verif-led { animation: pouls 1.4s ease-in-out infinite; }
+.verif[data-etat="illisible"] .verif-statut, .verif[data-etat="juge_echec"] .verif-statut, .verif[data-etat="dod_illisible"] .verif-statut {
+  color: var(--orange); border-color: rgba(255, 138, 76, 0.55); background: rgba(255, 138, 76, 0.09);
+}
+.verif-action {
+  min-height: 26px; padding: 0 12px;
+  border: 1px solid rgba(169, 152, 255, 0.55); border-radius: var(--rayon-petit);
+  background: transparent; color: var(--violet);
+  font-size: var(--t-min); font-weight: 650; line-height: 1.2; white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.verif-action[hidden] { display: none; }
+.verif-action:hover, .verif-action:focus-visible { background: var(--violet); border-color: var(--violet); color: var(--nuit); }
+.verif-action:disabled { border-color: var(--filet); color: var(--brume-2); background: transparent; cursor: default; }
+
+/* 1500 px et plus : la ligne du Juge se pose sous le nom, dans la même colonne ; les autres colonnes s'étendent sur les deux lignes
+   (une ligne d'agent sans definition of done garde une seule ligne). Plus étroit : voir le palier « une seule colonne ». */
+@media (min-width: 1500px) {
+  .strip.avec-verif > .rail,
+  .strip.avec-verif > .strip-statut,
+  .strip.avec-verif > .strip-dernier,
+  .strip.avec-verif > .strip-prochain,
+  .strip.avec-verif > .strip-cout,
+  .strip.avec-verif > .lancer { grid-row: 1 / span 2; }
+  .strip.avec-verif > .strip-nom { grid-row: 1; grid-column: 2; align-self: end; }
+  .strip.avec-verif > .verif { grid-row: 2; grid-column: 2; align-self: start; }
+}
+
+/* le verdict, dans le tiroir du lecteur : la carte (score, critères) est celle du bloc « .verdict » plus haut ; dessous, les corrections */
+.verdict-page { display: grid; gap: 22px; }
+.verdict-corrections { display: grid; gap: 10px; }
+.md .corrections-liste { display: grid; gap: 12px; padding: 0; list-style: none; counter-reset: correction; }
+.correction {
+  position: relative; display: grid; gap: 4px;
+  padding: 12px 16px 12px 58px;
+  border: 1px solid var(--filet); border-radius: var(--rayon);
+  background: var(--rack-2);
+  counter-increment: correction;
+}
+.correction::before {
+  content: counter(correction);
+  position: absolute; left: 16px; top: 12px;
+  display: grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: rgba(255, 92, 122, 0.14); box-shadow: inset 0 0 0 2px var(--rose);
+  color: var(--rose); font-family: var(--police-chiffres); font-weight: 700; font-size: var(--t-corps);
+}
+.correction strong { font-family: var(--police-titre); font-size: 19px; font-weight: 650; line-height: 1.25; color: var(--papier); overflow-wrap: anywhere; }
+.md .correction .preuve { font-size: var(--t-corps); color: var(--brume); overflow-wrap: anywhere; }
+/* dans le tiroir, les critères sont plus compacts que ceux de la carte d'origine : le score, les cinq critères, la correction et
+   sa preuve tiennent à l'écran sans défiler ; les boutons restent collés en bas du tiroir, jamais cachés sous la page */
+.lecteur-corps.avec-verdict { padding-bottom: 0; }
+.verdict-page.rejete .verdict .critere.ok strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.verdict-page .verdict-tete { padding: 14px 24px 12px; }
+.verdict-page .verdict-score { font-size: 60px; }
+.verdict-page .verdict .critere { padding: 9px 24px; }
+.verdict-page .verdict .critere-texte strong { font-size: 18px; font-weight: 600; line-height: 1.3; }
+.verdict-actions {
+  position: sticky; bottom: 0; z-index: 1;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 14px 0 16px;
+  border-top: 1px solid var(--filet);
+  background: var(--rack);
+}
+.verdict-relance, .verdict-rien {
+  min-height: 40px; padding: 0 18px;
+  border-radius: var(--rayon-petit);
+  font-size: var(--t-corps); font-weight: 650; cursor: pointer;
+}
+.verdict-relance { border: 1px solid var(--violet); background: var(--violet); color: var(--nuit); }
+.verdict-relance:hover:not(:disabled), .verdict-relance:focus-visible { background: var(--papier); border-color: var(--papier); }
+.verdict-rien { border: 1px solid var(--filet); background: var(--rack-2); color: var(--papier); }
+.verdict-rien:hover { border-color: var(--violet); }
+.verdict-brut { margin-left: auto; color: var(--violet); font-size: var(--t-min); }
+
 /* ------------------------------------------------------------------ une seule hauteur d'écran sur grand écran */
 
 @media (min-width: 1810px) and (min-height: 900px) {
@@ -972,6 +1074,8 @@ table.historique { width: 100%; border-collapse: collapse; font-size: var(--t-co
   .strip-prochain { grid-column: 2; }
   .strip-cout { grid-column: 3; }
   .strip .lancer { grid-column: 2 / 4; }
+  .strip .verif { grid-column: 2 / 4; margin-top: 0; }
+  .strip.avec-verif .rail { grid-row: 1 / span 5; }
   .ligne { grid-template-columns: 82px 88px 1fr; }
 }
 @media (max-width: 700px) {

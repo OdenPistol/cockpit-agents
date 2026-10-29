@@ -7,6 +7,7 @@ import { Cockpit } from './cockpit.js';
 import { chargerConfig, ConfigError } from './config.js';
 import { verifierBudget } from './cout.js';
 import { estAbonnement } from './etat.js';
+import { ID_JUGE } from './juge.js';
 import { arrondir, compte, duree, eur } from './utilitaires.js';
 
 const virgule = (n) => String(n).replace('.', ',');
@@ -39,9 +40,12 @@ export async function essai({ racine, config = null, afficher = console.log }) {
     return { code: 1, resultats: [], total_eur: 0 };
   }
 
-  const { agents, invalides } = cockpit.agents();
+  const { agents: tous, invalides } = cockpit.agents();
+  // Le Juge vérifie la sortie d'un autre agent, à la demande : l'essai ne le lance pas (et ne compte pas son coût).
+  const agents = tous.filter((a) => a.id !== ID_JUGE);
   for (const i of invalides) afficher(`⚠ Agent « ${i.id} » ignoré : ${i.erreur}`);
   afficher(`\nEssai : ${compte(agents.length, 'agent')}, un passage chacun, à la suite (Claude Code ${claude.version}).`);
+  if (agents.length < tous.length) afficher('Le Juge n\'est pas lancé par l\'essai : il vérifie la sortie d\'un autre agent, au clic, depuis l\'écran.');
 
   let agentCourant = null;
   cockpit.on('ligne', (l) => {

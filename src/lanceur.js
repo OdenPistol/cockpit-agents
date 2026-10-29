@@ -184,8 +184,11 @@ function erreurDuResultat(result, agent) {
  * @param {(ligne:{ts:string, niveau:string, type?:string, texte:string}) => void} [p.surLigne] journal en direct
  * @param {() => Date} [p.maintenant] horloge (remplaçable dans les tests)
  * @param {number|null} [p.estimationEur] estimation prudente du coût, comptée dans le budget si le coût reste inconnu
+ * @param {string|null} [p.complement] texte ajouté à la fin de la consigne de agent.md pour ce passage seulement : la demande
+ *   faite au Juge, ou les corrections d'une relance (la consigne du fichier n'est jamais modifiée)
+ * @param {object|null} [p.meta] champs ajoutés à la ligne de journal de ce passage (par exemple `verification` pour le Juge)
  */
-export function executer({ agent, config, racine, declencheur = 'manuel', surLigne = () => {}, maintenant = () => new Date(), estimationEur = null }) {
+export function executer({ agent, config, racine, declencheur = 'manuel', surLigne = () => {}, maintenant = () => new Date(), estimationEur = null, complement = null, meta = null }) {
   const home = os.homedir();
   const cmd = construireCommande(agent, config, racine);
   const reel = cmd.racineReelle;
@@ -300,6 +303,7 @@ export function executer({ agent, config, racine, declencheur = 'manuel', surLig
         };
 
       const entree = {
+        ...(meta ?? {}), // d'abord : les champs du cockpit ne peuvent jamais écraser ceux du passage
         agent: agent.id,
         agent_nom: agent.nom,
         declencheur,
@@ -358,9 +362,9 @@ export function executer({ agent, config, racine, declencheur = 'manuel', surLig
     });
     enfant.on('close', (code, signal) => finir(code, signal));
 
-    // La consigne est transmise telle quelle, par l'entrée standard.
+    // La consigne est transmise telle quelle, par l'entrée standard, avec le complément de ce passage s'il y en a un.
     enfant.stdin.on('error', () => {});
-    enfant.stdin.end(agent.prompt);
+    enfant.stdin.end(complement ? `${agent.prompt}\n\n${complement}` : agent.prompt);
 
     minuteur = setTimeout(() => {
       interrompu = 'delai';

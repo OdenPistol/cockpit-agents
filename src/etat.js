@@ -25,8 +25,10 @@ export function estAbonnement(config, claude) {
  * @param {object} p.config
  * @param {object|null} p.claude résultat de detecterClaude
  * @param {Date|null} [p.demarrage] heure de démarrage du cockpit
+ * @param {Record<string, object>} [p.verifications] où en est la vérification par le Juge de chaque agent qui a un dod.md
+ *   (voir etatVerification dans juge.js) ; un agent absent de la liste n'est pas vérifié
  */
-export function construireEtat({ agents, invalides, entrees, enCours, maintenant, config, claude, demarrage = null }) {
+export function construireEtat({ agents, invalides, entrees, enCours, maintenant, config, claude, demarrage = null, verifications = {} }) {
   const jour = jourLocal(maintenant);
   const repli = config.estimation_defaut_eur;
   const coutJour = coutDuJour(entrees, jour);
@@ -98,6 +100,8 @@ export function construireEtat({ agents, invalides, entrees, enCours, maintenant
       en_cours_depuis: enMarche ? enMarche.debut : null,
       outils: agent.outils,
       max_tours: agent.max_tours,
+      // sous l'agent vérifié : « Vérifié par le Juge : accepté », « Rejeté : 2 corrections »… (null s'il n'a pas de dod.md)
+      verification: verifications[agent.id] ?? null,
     };
   });
 
@@ -125,6 +129,7 @@ export function construireEtat({ agents, invalides, entrees, enCours, maintenant
       en_cours_depuis: null,
       outils: [],
       max_tours: 0,
+      verification: null,
     });
   }
 

@@ -8,6 +8,12 @@
 //   refus            une écriture est refusée par les permissions
 //   sans_result      s'arrête brutalement, sans événement « result »
 //   silence          ne dit plus rien (pour tester le délai maximal)
+//   juge_accepte     rôle du Juge : écrit, au chemin que la demande du cockpit donne, un verdict ACCEPTÉ (tous les critères OK)
+//   juge_rejette     comme juge_accepte, mais REJETÉ : le dernier critère en ÉCART, une correction avec sa preuve
+//   juge_rejette_deux  REJETÉ avec deux critères en ÉCART et deux corrections
+//   juge_malforme    écrit un verdict qui ne respecte pas le format (« Verdict : ACCEPTÉ » et rien d'autre)
+//   juge_ailleurs    écrit son verdict ailleurs que là où la demande le dit
+//   juge_muet        n'écrit aucun verdict
 // FAKE_OUTILS (liste séparée par des virgules) et FAKE_TOURS fixent les outils annoncés et le nombre de tours du succès.
 // Si FAKE_ARGS_FILE est défini, les arguments, l'environnement utile et la consigne reçue y sont écrits.
 
@@ -99,15 +105,50 @@ if (scenario === 'echec' || scenario === 'max_tours') {
   process.exit(1);
 }
 
-const sortie = path.resolve(process.cwd(), '../../out', idAgent, 'resultat.md');
-fs.mkdirSync(path.dirname(sortie), { recursive: true });
-fs.writeFileSync(sortie, `# Résultat simulé de ${idAgent}\n`);
-await attendre(pause);
-emettre({
-  type: 'assistant',
-  message: { id: 'msg_3', role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_3', name: 'Write', input: { file_path: sortie, content: `# Résultat simulé de ${idAgent}\n` } }] },
-});
-emettre({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_3', content: 'File created successfully' }] } });
+/** Le verdict que le Juge simulé écrit, d'après la demande que le cockpit a ajoutée à sa consigne. */
+function verdictSimule() {
+  const champ = (nom) => new RegExp(`^${nom} : (\\S+)`, 'm').exec(prompt)?.[1];
+  const criteres = prompt.split('\n').filter((l) => /^\d+\. /.test(l));
+  const nom = /^Nom de l'agent : (.+)$/m.exec(prompt)?.[1] ?? 'Agent';
+  const deux = scenario === 'juge_rejette_deux';
+  const etats = criteres.map((_, i) => (scenario === 'juge_accepte' ? 'OK' : i === criteres.length - 1 || (deux && i === 0) ? 'ÉCART' : 'OK'));
+  const corrections = etats.filter((e) => e === 'ÉCART').length;
+  const lignes = [
+    `# Verdict du Juge : ${nom}`, '',
+    `Verdict : ${scenario === 'juge_accepte' ? 'ACCEPTÉ' : 'REJETÉ'}`,
+    `Agent vérifié : ${champ('Agent vérifié')}`,
+    `Sortie jugée : ${champ('Sortie jugée')}`,
+    `Bilan : ${nom} ${scenario === 'juge_accepte' ? `accepté, ${criteres.length} critères sur ${criteres.length}.` : `rejeté, ${corrections} correction${corrections > 1 ? 's' : ''}.`}`, '',
+    '## Critères', '',
+    ...criteres.map((c, i) => `${i + 1}. ${etats[i]} : ${c.replace(/^\d+\. /, '')}`), '',
+    '## Corrections', '',
+    ...(corrections === 0 ? ['Aucune.'] : etats.flatMap((e, i) => (e === 'ÉCART' ? [`${etats.slice(0, i + 1).filter((x) => x === 'ÉCART').length}. Corriger le point ${i + 1}.`, `   Preuve : « valeur lue » à la ligne ${i + 1} du fichier.`] : []))),
+    '',
+  ];
+  return { chemin: path.resolve(process.cwd(), champ('Fichier de verdict à écrire')), contenu: lignes.join('\n') };
+}
+
+let sortie = path.resolve(process.cwd(), '../../out', idAgent, 'resultat.md');
+// Relancé avec les corrections du Juge, l'agent refait une sortie différente (sinon un verdict ne se distinguerait pas du précédent).
+let contenu = `# Résultat simulé de ${idAgent}\n${prompt.includes('## Corrections du Juge') ? 'Refait avec les corrections du Juge.\n' : ''}`;
+if (scenario.startsWith('juge_')) {
+  const v = verdictSimule();
+  sortie = v.chemin;
+  contenu = v.contenu;
+  if (scenario === 'juge_malforme') contenu = 'Verdict : ACCEPTÉ\n';
+  if (scenario === 'juge_ailleurs') sortie = path.resolve(process.cwd(), '../../out', idAgent, 'autre-chose.md');
+  if (scenario === 'juge_muet') sortie = null;
+}
+if (sortie !== null) {
+  fs.mkdirSync(path.dirname(sortie), { recursive: true });
+  fs.writeFileSync(sortie, contenu);
+  await attendre(pause);
+  emettre({
+    type: 'assistant',
+    message: { id: 'msg_3', role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_3', name: 'Write', input: { file_path: sortie, content: contenu } }] },
+  });
+  emettre({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_3', content: 'File created successfully' }] } });
+}
 await attendre(pause);
 emettre({ type: 'assistant', message: { id: 'msg_4', role: 'assistant', content: [{ type: 'text', text: 'Terminé.\n\nLe résultat est écrit.' }] } });
 emettre({

@@ -160,9 +160,9 @@ describe('le README court (README.md) : ce qu\'il annonce est ce que le code fai
   const journal = fs.readFileSync(path.join(RACINE_REELLE, 'docs', 'exemples-de-sorties', 'journal-2026-10-21.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const virgule = (n) => n.toFixed(2).replace('.', ',');
 
-  it('les cinq parties sont là, les prérequis en dernier', () => {
+  it('les six parties sont là (la nouvelle version après le lancement), les prérequis en dernier', () => {
     const titres = [...court.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
-    assert.deepEqual(titres, ['Ce que c\'est', 'Le lancer en 2 commandes', 'Ce qu\'il ne fait pas encore', 'Créer un agent', 'Ce qu\'il vous faut']);
+    assert.deepEqual(titres, ['Ce que c\'est', 'Le lancer en 2 commandes', 'Nouvelle version : l\'agent Juge', 'Ce qu\'il ne fait pas encore', 'Créer un agent', 'Ce qu\'il vous faut']);
   });
 
   it('les commandes : un clone puis deux scripts de package.json, chacune seule sur une ligne, sans commentaire ni guillemet', () => {
@@ -184,13 +184,13 @@ describe('le README court (README.md) : ce qu\'il annonce est ce que le code fai
     assert.ok(court.includes(`${String(config.plafond_jour_eur).replace('.', ',')} € dans \`config.json\``));
   });
 
-  it('les 9 agents annoncés sont les 9 dossiers de agents/', () => {
-    assert.equal(agents.length, 9);
-    assert.match(court, /La démo a 9 agents d'exemple/);
+  it('les 10 agents annoncés sont les 10 dossiers de agents/', () => {
+    assert.equal(agents.length, 10);
+    assert.match(court, /La démo a 10 agents d'exemple/);
     for (const a of agents) assert.ok(court.includes(a.nom), `${a.nom} absent du README`);
   });
 
-  it('les heures prévues : quatre agents, entre 07:00 et 08:00', () => {
+  it('les heures prévues : quatre agents, entre 07:00 et 08:00 (le Juge n\'en a pas : il ne part qu\'au clic)', () => {
     const planifies = agents.filter((a) => a.planning);
     assert.equal(planifies.length, 4);
     assert.ok(planifies.every((a) => a.planning >= '07:00' && a.planning <= '08:00'));
@@ -242,5 +242,92 @@ describe('le README court (README.md) : ce qu\'il annonce est ce que le code fai
     assert.ok(!/[\u2013\u2014]/.test(court));
     assert.ok(!TUTOIEMENT.test(court), `tutoiement : « ${TUTOIEMENT.exec(court)?.[0]} »`);
     assert.match(court, /\b(vous|votre|vos)\b/i);
+  });
+});
+
+describe('la nouvelle version : le Juge est annoncé tel qu\'il est livré', () => {
+  const lire = (...p) => fs.readFileSync(path.join(RACINE_REELLE, ...p), 'utf8');
+  const court = lire('README.md');
+  const paquet = JSON.parse(lire('package.json'));
+  const verrou = JSON.parse(lire('package-lock.json'));
+  const config = chargerConfig(RACINE_REELLE);
+  const { agents } = chargerAgents(RACINE_REELLE, config.ordre);
+  const juge = agents.find((a) => a.id === 'juge');
+  const sectionJuge = court.slice(court.indexOf('## Nouvelle version : l\'agent Juge'), court.indexOf('## Ce qu\'il ne fait pas encore'));
+  const changelog = lire('CHANGELOG.md');
+  const dod = lire('docs', 'ecrire-une-dod.md');
+  const ecran = lire('public', 'app.js');
+
+  it('la version du paquet, du verrou, du README et du CHANGELOG est la même : 1.1.0', () => {
+    assert.equal(paquet.version, '1.1.0');
+    assert.equal(verrou.version, '1.1.0');
+    assert.equal(verrou.packages[''].version, '1.1.0');
+    assert.match(sectionJuge, /Version 1\.1\.0 \(voir le \[CHANGELOG\]\(CHANGELOG\.md\)\)/);
+  });
+
+  it('le CHANGELOG : l\'entrée 1.1.0 « date à remplir à la publication », puis la 1.0.0 datée du 28/10/2026', () => {
+    assert.match(changelog, /^# Changelog\n/);
+    const titres = [...changelog.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
+    assert.deepEqual(titres, ['1.1.0 (date à remplir à la publication) : l\'agent Juge', '1.0.0 (28/10/2026) : le cockpit d\'agents']);
+    assert.match(changelog, /Le coût du Juge compte dans son budget et dans le plafond du jour/);
+    assert.match(changelog, /F-2026-0079/);
+  });
+
+  it('la section « Nouvelle version » : le principe en cinq lignes, comment l\'essayer, avec les mots exacts de l\'écran', () => {
+    const puces = sectionJuge.split('\n').filter((l) => l.startsWith('- '));
+    assert.equal(puces.length, 5, 'le principe tient en cinq lignes');
+    for (const mot of ['Lancer le Juge', 'Relancer avec les corrections', 'Vérifié par le Juge : accepté', 'Rejeté : 1 correction', 'F-2026-0079', 'ACCEPTÉ ou REJETÉ']) {
+      assert.ok(sectionJuge.includes(mot), `« ${mot} » absent de la section`);
+    }
+    for (const bouton of ['Lancer le Juge', 'Relancer avec les corrections']) assert.ok(ecran.includes(`'${bouton}'`), `le bouton « ${bouton} » existe à l'écran`);
+    assert.ok(sectionJuge.includes(`${String(juge.budget_jour_eur.toFixed(2)).replace('.', ',')} €`), 'le budget annoncé est celui de agents/juge/agent.md');
+    assert.ok(sectionJuge.includes('outils Read et Write'));
+  });
+
+  it('les renvois mènent quelque part : le CHANGELOG et la page « comment écrire une DoD », depuis les deux README', () => {
+    assert.ok(sectionJuge.includes('(docs/ecrire-une-dod.md)'));
+    assert.ok(readme.includes('(ecrire-une-dod.md)'));
+    assert.ok(fs.existsSync(path.join(RACINE_REELLE, 'CHANGELOG.md')));
+    assert.ok(fs.existsSync(path.join(RACINE_REELLE, 'docs', 'ecrire-une-dod.md')));
+  });
+
+  it('la page « comment écrire une DoD » tient en une page, et son exemple est la DoD livrée de Factures, mot pour mot', () => {
+    assert.ok(dod.split('\n').length <= 70, `${dod.split('\n').length} lignes`);
+    assert.match(dod, /s'écrit \*\*avant\*\* le travail/);
+    const exemple = /```\n([\s\S]*?)```/.exec(dod)?.[1];
+    assert.equal(exemple, lire('agents', 'factures', 'dod.md'));
+    assert.match(dod, /Trois à cinq critères, dix au plus, un par numéro, chacun de 600 caractères au plus/);
+  });
+
+  it('le README complet : le Juge dans la table des 10 agents, ses états tels que l\'écran les écrit, ses limites dites', () => {
+    assert.match(readme, /^## Les 10 agents$/m);
+    assert.match(readme, /^\| Juge \|.*`out\/juge\/` \|$/m);
+    for (const texte of [
+      '5 critères écrits · rien à vérifier encore', 'À vérifier par le Juge', 'Le Juge vérifie…', 'Vérifié par le Juge : accepté', 'Rejeté : 2 corrections',
+      'Verdict du Juge illisible', 'Le Juge n\'a pas pu vérifier', 'Lancer le Juge', 'Relancer avec les corrections', 'Relancer le Juge',
+    ]) assert.ok(readme.includes(texte), `« ${texte} » absent du README complet`);
+    assert.match(readme, /^## Le Juge et la definition of done$/m);
+    assert.match(readme, /Le Juge est un modèle/);
+    assert.match(readme, /Rien d'automatique/);
+    assert.match(readme, /`npm run essai` ne le lance pas/);
+    assert.match(readme, /dix corrections, 800 caractères chacune/);
+    assert.match(readme, /out\/juge\/verdict-<agent>-AAAA-MM-JJ-N\.md/);
+  });
+
+  it('le README complet renvoie aux deux verdicts réels livrés en exemple, et donne le coût mesuré d\'un passage du Juge', () => {
+    for (const nom of ['verdict-factures-2026-10-29-1.md', 'verdict-factures-2026-10-29-2.md']) {
+      assert.ok(readme.includes(`\`${nom}\``), nom);
+      assert.ok(fs.existsSync(path.join(RACINE_REELLE, 'docs', 'exemples-de-sorties', nom)), nom);
+    }
+    // mesure du 29/10/2026, quatre passages réels : le journal n'est pas publié, le chiffre est écrit ici comme celui de l'essai du 28/10
+    assert.match(readme, /Le Juge, mesuré le 29\/10\/2026 : de 0,042 € à 0,055 € par passage \(sept passages, de 10 à 30 secondes, 4 tours chacun\)/);
+  });
+
+  it('l\'essai réel du Juge est dit tel qu\'il s\'est passé (quatre sorties sur quatre recopient l\'erreur, trois rejets, deux accords), avec sa réserve', () => {
+    assert.match(readme, /Mesure du 29\/10\/2026 \(Claude Code 2\.1\.308, modèle sonnet\) : sur quatre passages de Factures avec l'erreur plantée, Factures a recopié l'erreur quatre fois ; le Juge a rejeté les trois sorties qu'il a jugées, pour le même critère, et il a accepté les deux sorties refaites avec les corrections\./);
+    assert.match(readme, /Essayé en réel le 29\/10\/2026 : une sortie qui contenait une fausse instruction officielle/);
+    assert.match(readme, /L'autre voie a aussi été essayée en réel \(corriger le fichier de données avant de relancer Factures\) : Factures a écrit 1 560,00 € et un total de 14 220,00 €, et le Juge a accepté du premier coup\./);
+    assert.match(readme, /Un modèle peut varier d'un essai à l'autre : c'est une mesure, pas une garantie\./);
+    assert.match(readme, /Il juge le fichier que l'agent a écrit en dernier/);
   });
 });
