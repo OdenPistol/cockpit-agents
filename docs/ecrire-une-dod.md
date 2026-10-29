@@ -9,11 +9,12 @@ Prenez la consigne de votre agent et demandez-vous : si on me rendait ce travail
 ## Les règles d'un bon critère
 
 1. **Un critère se constate par oui ou non.** Le Juge doit pouvoir répondre « respecté » ou « pas respecté » en lisant la sortie et ses sources. « Le résultat est correct » ne se constate pas ; « le total annoncé est la somme des lignes du tableau » se constate.
-2. **Il dit où regarder.** Nommez le fichier ou la donnée qui fait foi (`data/factures/factures.csv`), pour que le Juge refasse le calcul lui-même au lieu de croire le texte de la sortie.
+2. **Il dit où regarder.** Nommez le fichier ou la donnée qui fait foi (`data/factures/factures.csv`), pour que le Juge relise la source au lieu de croire le texte de la sortie. Dans la démo, le Juge refait aussi le calcul ; pour un calcul pur, le code passe d'abord (règle 7).
 3. **Il chiffre ses seuils et ses cas limites.** « Plus de 30 jours (31 jours ou plus) » vaut mieux que « en retard ».
 4. **Il dit quoi faire quand les données se contredisent.** « Si le fichier se contredit, la sortie le signale au lieu de recopier le montant » : sans cela, aucun critère ne tranche.
 5. **Il n'y en a pas trop.** Trois à cinq critères, dix au plus, un par numéro, chacun de 600 caractères au plus. Au-delà, la liste ne se relit plus et on ne sait plus ce qui compte.
 6. **Il évite le goût.** « Le ton est agréable » n'a pas de preuve : le Juge peut se tromper et personne ne peut le vérifier. Gardez les critères objectifs ; ce qui relève du goût reste à relire par vous.
+7. **Ce qui se calcule se vérifie par du code.** Une somme, une date, un format : un petit script les vérifie à l'identique à chaque fois. Gardez le Juge pour ce qu'un calcul ne voit pas : une source vraiment citée, un brouillon qui répond à la question posée. Dans la démo, l'addition est dans les critères du Juge parce qu'elle se voit bien à l'écran.
 
 ## Un critère faible, un critère fort
 

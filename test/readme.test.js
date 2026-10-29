@@ -345,6 +345,18 @@ describe('la nouvelle version : le Juge est annoncé tel qu\'il est livré', () 
     assert.ok(!/score/i.test(dod), 'pas de « score »');
   });
 
+  it('la page « comment écrire une DoD » dit la même chose que l\'écran : le code vérifie ce qui se calcule, le Juge ne refait le calcul que dans la démo ; la règle du goût est inchangée', () => {
+    const regles = dod.slice(dod.indexOf('## Les règles d\'un bon critère'), dod.indexOf('## Un critère faible, un critère fort')).split('\n').filter((l) => /^\d+\. /.test(l));
+    assert.deepEqual(regles.map((l) => Number(/^(\d+)\./.exec(l)[1])), [1, 2, 3, 4, 5, 6, 7], 'numérotées à la suite : les points 1 à 6 gardent leur numéro');
+    // le point 2 ne contredit plus la règle 7 : dans la démo le Juge refait le calcul, pour un calcul pur le code passe d'abord
+    assert.ok(regles[1].includes('pour que le Juge relise la source au lieu de croire le texte de la sortie. Dans la démo, le Juge refait aussi le calcul ; pour un calcul pur, le code passe d\'abord (règle 7).'));
+    assert.ok(!dod.includes('refasse le calcul lui-même'), 'plus de phrase qui laisse croire que le Juge doit toujours refaire le calcul');
+    // le point 6 reste tel quel, mot pour mot
+    assert.equal(regles[5], '6. **Il évite le goût.** « Le ton est agréable » n\'a pas de preuve : le Juge peut se tromper et personne ne peut le vérifier. Gardez les critères objectifs ; ce qui relève du goût reste à relire par vous.');
+    // la règle ajoutée, mot pour mot
+    assert.equal(regles[6], '7. **Ce qui se calcule se vérifie par du code.** Une somme, une date, un format : un petit script les vérifie à l\'identique à chaque fois. Gardez le Juge pour ce qu\'un calcul ne voit pas : une source vraiment citée, un brouillon qui répond à la question posée. Dans la démo, l\'addition est dans les critères du Juge parce qu\'elle se voit bien à l\'écran.');
+  });
+
   it('la page « comment écrire une DoD » tient en une page, et son exemple est la DoD livrée de Factures, mot pour mot', () => {
     assert.ok(dod.split('\n').length <= 70, `${dod.split('\n').length} lignes`);
     assert.match(dod, /s'écrit \*\*avant\*\* le travail/);
