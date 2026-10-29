@@ -2,6 +2,10 @@
 
 Une definition of done (DoD) est la liste des critères qu'un travail doit respecter pour être accepté. Elle s'écrit **avant** le travail, jamais après avoir vu le résultat : sinon on règle les critères sur ce que l'agent a produit, et le Juge ne juge plus rien. Dans ce cockpit, c'est le fichier `agents/<agent>/dod.md`. Le Juge compare la sortie de l'agent à chaque critère, un par un.
 
+## Par où commencer
+
+Prenez la consigne de votre agent et demandez-vous : si on me rendait ce travail, qu'est-ce qui me le ferait refuser ? Notez chaque réponse, gardez les trois à cinq erreurs qui coûteraient le plus cher, puis rendez chacune vérifiable avec les règles ci-dessous.
+
 ## Les règles d'un bon critère
 
 1. **Un critère se constate par oui ou non.** Le Juge doit pouvoir répondre « respecté » ou « pas respecté » en lisant la sortie et ses sources. « Le résultat est correct » ne se constate pas ; « le total annoncé est la somme des lignes du tableau » se constate.
@@ -18,6 +22,7 @@ Une definition of done (DoD) est la liste des critères qu'un travail doit respe
 | Les montants sont justes. | Le montant TTC de chaque facture du tableau est égal à son montant HT plus sa TVA, d'après le fichier. |
 | Aucun oubli. | Toute facture impayée de plus de 30 jours du fichier est dans le tableau, et les autres factures impayées sont nommées dans « Non concernées ». |
 | Les relances sont bien faites. | Chaque brouillon donne le numéro, le montant TTC et la date d'échéance de sa facture, identiques à ceux du tableau. |
+| Les infos sont récentes. | Chaque information cite sa source (lien) et une date de moins de 7 jours. |
 
 ## Le format du fichier
 
@@ -39,7 +44,7 @@ Si le fichier n'a aucun critère numéroté, s'il en a plus de dix ou si les num
 
 ## Ce que le Juge en fait
 
-Il juge le dernier fichier que l'agent a écrit : si votre agent produit plusieurs fichiers par passage, la definition of done doit porter sur celui-là. Pour chaque critère, il rend OK ou ÉCART. Il n'y a pas de note : un seul écart suffit pour que le verdict soit REJETÉ. Chaque écart donne au moins une correction numérotée, avec sa preuve : la ligne de la sortie qui pose problème, ce que dit la source, le calcul refait. Un critère qu'il n'a pas pu vérifier est un écart.
+Il juge le dernier fichier que l'agent a écrit : si votre agent produit plusieurs fichiers par passage, la definition of done doit porter sur celui-là. Pour chaque critère, il rend OK ou ÉCART. Le verdict affiche combien de critères sont respectés (par exemple 4/5), mais ce n'est pas une note : un seul écart suffit pour que le verdict soit REJETÉ. Chaque écart donne au moins une correction numérotée, avec sa preuve : la ligne de la sortie qui pose problème, ce que dit la source, le calcul refait. Un critère qu'il n'a pas pu vérifier est un écart.
 
 ## Après un rejet
 

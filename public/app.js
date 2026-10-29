@@ -699,7 +699,11 @@ function construireVerdict(agent) {
     el('strong', undefined, accepte ? 'Accepté' : 'Rejeté'),
     el('span', 'verdict-suite', accepte ? 'tous les critères sont respectés' : `${compte(d.corrections.length, 'correction')} à faire`),
   );
-  tete.append(el('div', 'verdict-score', `${d.criteres.filter((c) => c.ok).length}/${d.criteres.length}`), titre);
+  // « 4/5 » dit combien de critères sont respectés ; ce n'est pas une note (un seul écart suffit pour rejeter) : l'infobulle le dit
+  const respectes = d.criteres.filter((c) => c.ok).length;
+  const nombre = el('div', 'verdict-score', `${respectes}/${d.criteres.length}`);
+  nombre.title = `${compte(respectes, 'critère')} ${plurielSi(respectes, 'respecté')} sur ${d.criteres.length}${accepte ? '' : ' (ce n\'est pas une note : un seul écart suffit pour rejeter)'}`;
+  tete.append(nombre, titre);
   const criteres = el('ul', 'verdict-criteres');
   for (const c of d.criteres) {
     const li = el('li', `critere ${c.ok ? 'ok' : 'rate'}`);

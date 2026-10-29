@@ -66,6 +66,23 @@ export function validerConfig(brut) {
   return config;
 }
 
+/**
+ * Le port demandé par la variable d'environnement PORT, ou null si elle est absente ou vide. Elle l'emporte sur config.json :
+ * `PORT=4322 npm start` lance cette copie du cockpit à côté d'une autre qui occupe déjà le port de config.json, sans modifier
+ * aucun fichier et sans toucher à l'autre copie.
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {number|null}
+ * @throws {ConfigError} si la valeur n'est pas un numéro de port entre 0 et 65535
+ */
+export function portDeLEnvironnement(env = process.env) {
+  const brut = typeof env.PORT === 'string' ? env.PORT.trim() : '';
+  if (brut === '') return null;
+  if (!/^\d{1,5}$/.test(brut) || Number(brut) > 65535) {
+    throw new ConfigError(`la variable PORT vaut « ${brut.slice(0, 20)} » : un numéro de port entre 0 et 65535 est attendu (exemple : PORT=4322 npm start)`);
+  }
+  return Number(brut);
+}
+
 /** Lit config.json à la racine du projet. Un fichier absent donne les valeurs par défaut. */
 export function chargerConfig(racine) {
   const fichier = path.join(racine, 'config.json');

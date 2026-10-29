@@ -54,6 +54,15 @@ function repondreJson(res, statut, objet) {
 }
 
 /**
+ * Le message quand le port est déjà pris. Il ne dit jamais d'ouvrir ce port (ce serait ouvrir l'autre programme, peut-être une autre
+ * copie du cockpit) ni d'arrêter quoi que ce soit : il propose d'abord un autre port, sans toucher à config.json.
+ */
+export function messagePortOccupe(port) {
+  const autre = port < 65535 ? port + 1 : port - 1;
+  return `Le port ${port} est déjà utilisé : un autre programme, peut-être une autre copie du cockpit, l'occupe. Pour lancer celui-ci à côté, sans toucher à l'autre : PORT=${autre} npm start (ou change « port » dans config.json).`;
+}
+
+/**
  * Démarre le serveur web.
  * @param {{cockpit: import('./cockpit.js').Cockpit, config: object, racine: string, intervalleEtatMs?: number}} p
  * @returns {Promise<{serveur: http.Server, port: number, fermer: () => Promise<void>}>}
@@ -198,9 +207,7 @@ export function demarrerServeur({ cockpit, config, racine, intervalleEtatMs = 50
     serveur.once('error', (e) => {
       clearInterval(horloge);
       clearInterval(battement);
-      reject(e.code === 'EADDRINUSE'
-        ? new Error(`Le port ${config.port} est déjà utilisé : le cockpit tourne peut-être déjà. Ouvre http://127.0.0.1:${config.port} ou change « port » dans config.json.`)
-        : e);
+      reject(e.code === 'EADDRINUSE' ? new Error(messagePortOccupe(config.port)) : e);
     });
     serveur.listen(config.port, '127.0.0.1', () => {
       const { port } = serveur.address();

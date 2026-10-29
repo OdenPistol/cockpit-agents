@@ -33,7 +33,7 @@ export class DodError extends Error {
   }
 }
 
-const sansAccents = (texte) => String(texte).normalize('NFD').replace(/[̀-ͯ]/g, '');
+const sansAccents = (texte) => String(texte).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 // Un chemin du projet (« out/factures/x.md ») vu depuis le dossier du Juge (agents/juge/) : « ../../out/factures/x.md ».
 const depuisJuge = (cheminProjet) => `../../${cheminProjet}`;
 // Pour comparer deux écritures d'un même chemin : sans « ./ », sans « ../../ » devant, sans guillemets ni apostrophes inverses.
@@ -192,13 +192,41 @@ function lireCorrections(lignesSection) {
 }
 
 /**
+ * La ligne « Bilan : » est ce que l'écran dit du Juge (« Factures rejeté, 1 correction. ») : elle ne doit pas contredire le verdict.
+ * Contradiction si elle dit « rejeté » sous ACCEPTÉ (ou « accepté » sous REJETÉ), si son « N critères sur M » a un M qui n'est pas le
+ * nombre de critères de la DoD (ou, sous ACCEPTÉ, un N qui n'est pas M), ou si son « N corrections » n'est pas le nombre de corrections.
+ * Une négation devant le mot (« non accepté », « pas rejeté ») ne compte pas comme le dire.
+ * @returns {string|null} le motif du refus, ou null si le bilan est cohérent (ou absent)
+ */
+function bilanContredit({ bilan, verdict, corrections, nbCriteresDod }) {
+  if (bilan === null || bilan === '') return null;
+  const b = sansAccents(bilan).toLowerCase();
+  const ditSansNegation = (motif) => [...b.matchAll(motif)].some((m) => !/\b(?:non|pas|ni|jamais)\s+(?:encore\s+)?$/.test(b.slice(Math.max(0, m.index - 14), m.index)));
+  if (verdict === 'accepte' && ditSansNegation(/\brejet(?:e|ee|es|ees)?\b/g)) return 'le Bilan dit « rejeté » alors que le verdict est ACCEPTÉ';
+  if (verdict === 'rejete' && ditSansNegation(/\baccept(?:e|ee|es|ees|ation)\b/g)) return 'le Bilan dit « accepté » alors que le verdict est REJETÉ';
+  const surDod = /(\d+)\s*crit[eè]res?\s+sur\s+(\d+)/i.exec(bilan);
+  if (surDod) {
+    if (Number(surDod[2]) !== nbCriteresDod) return `le Bilan dit « ${surDod[0]} » : la DoD a ${compte(nbCriteresDod, 'critère')}`;
+    // Sous ACCEPTÉ, tous les critères sont respectés : « N critères sur N » doit le dire. Sous REJETÉ, le premier nombre peut compter
+    // les critères respectés comme les écarts : seul le total est contrôlé.
+    if (verdict === 'accepte' && Number(surDod[1]) !== nbCriteresDod) return `le Bilan dit « ${surDod[0]} » : un verdict ACCEPTÉ respecte les ${nbCriteresDod} critères`;
+  }
+  const nbCorrections = /(\d+)\s*corrections?\b/i.exec(bilan);
+  if (nbCorrections && Number(nbCorrections[1]) !== corrections.length) {
+    return `le Bilan dit « ${nbCorrections[0]} » : le verdict a ${compte(corrections.length, 'correction')}`;
+  }
+  return null;
+}
+
+/**
  * Lit un verdict du Juge et le refuse s'il n'est pas exactement ce que la consigne du Juge décrit.
  * Un verdict illisible n'est jamais traité comme accepté.
  *
  * Forme attendue (voir agents/juge/agent.md) : une ligne « Verdict : ACCEPTÉ » ou « Verdict : REJETÉ », l'agent vérifié et la sortie
  * jugée recopiés de la demande, une section « Critères » (un « N. OK : … » ou « N. ÉCART : … » par critère de la DoD, dans l'ordre)
  * et une section « Corrections » (« Aucune. » si accepté ; sinon des corrections numérotées, chacune avec sa « Preuve : »).
- * Contrôles de cohérence : accepté seulement si tous les critères sont OK ; rejeté seulement s'il y a au moins un écart.
+ * Contrôles de cohérence : accepté seulement si tous les critères sont OK ; rejeté seulement s'il y a au moins un écart ; une seule
+ * ligne « Verdict : » et une seule section « Critères » et « Corrections » ; un « Bilan : » qui dit la même chose que le verdict.
  *
  * @param {string} texte contenu du fichier de verdict
  * @param {{agent:string, sortie:string, criteres:{n:number, texte:string}[]}} attendu
@@ -210,6 +238,17 @@ export function lireVerdict(texte, attendu) {
   const brut = String(texte ?? '').replace(/^﻿/, '').replace(/\r\n?/g, '\n');
   if (brut.trim() === '') return refus('le fichier de verdict est vide');
   const lignes = brut.split('\n').map((l) => l.replace(/\*\*|__/g, ''));
+
+  // Un verdict ne se répète pas : deux lignes « Verdict : », ou deux fois la même section, laisseraient le choix entre deux lectures,
+  // et le cockpit n'en lirait qu'une. Refusé, même si les deux disent la même chose.
+  if (lignes.filter((l) => /^\s*verdict\s*:/i.test(sansAccents(l))).length > 1) {
+    return refus('plusieurs lignes « Verdict : » : un verdict ne se contredit pas lui-même, il n\'en a qu\'une');
+  }
+  for (const [titre, nom] of [['crit[eè]res', 'Critères'], ['corrections', 'Corrections']]) {
+    if (lignes.filter((l) => new RegExp(`^\\s*##\\s+${titre}\\b.*$`, 'i').test(sansAccents(l))).length > 1) {
+      return refus(`la section « ${nom} » est écrite plusieurs fois : une seule est permise`);
+    }
+  }
 
   // L'en-tête : tout ce qui précède la première section « ## ». Seul lui compte pour « Verdict : », jamais le corps.
   const premiereSection = lignes.findIndex((l) => /^\s*##\s+/.test(l));
@@ -245,8 +284,13 @@ export function lireVerdict(texte, attendu) {
   const criteres = [];
   for (const ligne of criteresLus) {
     const m = /^\s*(\d+)\s*[.)]\s*(OK|ECART)\s*:/i.exec(sansAccents(ligne));
-    if (m) criteres.push({ n: Number(m[1]), ok: m[2].toUpperCase() === 'OK' });
-    else if (ligne.trim() !== '' && criteres.length === 0) return refus(`la section « Critères » doit commencer par « 1. OK : … » ou « 1. ÉCART : … » (trouvé « ${court(ligne, 40)} »)`);
+    if (m) {
+      // « 2. OK : ÉCART en fait… » : le texte recopié de la DoD ne commence jamais par ÉCART ; c'est un verdict qui se dément
+      if (m[2].toUpperCase() === 'OK' && /^\s*\d+\s*[.)]\s*OK\s*:\s*ECART\b/i.test(sansAccents(ligne))) {
+        return refus(`le critère ${m[1]} est marqué OK mais son texte dit ÉCART`);
+      }
+      criteres.push({ n: Number(m[1]), ok: m[2].toUpperCase() === 'OK' });
+    } else if (ligne.trim() !== '' && criteres.length === 0) return refus(`la section « Critères » doit commencer par « 1. OK : … » ou « 1. ÉCART : … » (trouvé « ${court(ligne, 40)} »)`);
   }
   if (criteres.length !== attendu.criteres.length) {
     return refus(`la DoD a ${compte(attendu.criteres.length, 'critère')}, le verdict en juge ${criteres.length}`);
@@ -274,6 +318,9 @@ export function lireVerdict(texte, attendu) {
       if (c.preuve === '') return refus(`la correction ${c.n} n'a pas de « Preuve : »`);
     }
   }
+
+  const contradiction = bilanContredit({ bilan, verdict, corrections, nbCriteresDod: attendu.criteres.length });
+  if (contradiction) return refus(contradiction);
 
   return {
     ok: true,

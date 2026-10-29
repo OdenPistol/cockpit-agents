@@ -449,6 +449,21 @@ describe('sécurité : le Juge a le même modèle que les autres agents', () => 
     assert.ok(commande.args.includes('--no-session-persistence'));
   });
 
+  it('même avec « configuration_isolee »: false, le Juge garde --strict-mcp-config (aucun connecteur du compte) ; les autres agents gardent le comportement documenté', () => {
+    const complete = construireCommande(jugeLivre, configTest({ configuration_isolee: false }), RACINE_REELLE);
+    assert.equal(complete.args.filter((a) => a === '--strict-mcp-config').length, 1, 'une seule fois, jamais deux');
+    for (const drapeau of ['--setting-sources', '--settings', '--disable-slash-commands']) assert.ok(!complete.args.includes(drapeau), `${drapeau} reste réservé à la configuration isolée`);
+    assert.notEqual(complete.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, '1');
+    assert.equal(apres('--tools'), 'Read,Write', 'ses outils ne changent pas');
+    // un autre agent, en configuration complète, n'a aucune de ces options
+    const factures = lireAgentMd(fs.readFileSync(path.join(RACINE_REELLE, 'agents', 'factures', 'agent.md'), 'utf8'), 'factures');
+    assert.ok(!construireCommande(factures, configTest({ configuration_isolee: false }), RACINE_REELLE).args.includes('--strict-mcp-config'));
+    // et en configuration isolée, le Juge l'a une seule fois
+    const isolee = construireCommande(jugeLivre, configTest({ configuration_isolee: true }), RACINE_REELLE);
+    assert.equal(isolee.args.filter((a) => a === '--strict-mcp-config').length, 1);
+    assert.equal(isolee.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, '1');
+  });
+
   it('il lit data/ et out/ (la sortie jugée et ses sources), travaille dans son dossier, jamais ailleurs', () => {
     const reel = fs.realpathSync(RACINE_REELLE);
     assert.deepEqual(commande.args.filter((a, i) => commande.args[i - 1] === '--add-dir'), [path.join(reel, 'data'), path.join(reel, 'out')]);

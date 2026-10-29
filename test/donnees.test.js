@@ -155,6 +155,26 @@ describe('données fictives', () => {
     assert.match(lire('data', 'LISEZMOI.md'), /F-2026-0079/);
   });
 
+  it('le faux secret de la démo Sécurité : déclaré fictif, et la seule alerte de gitleaks qu\'ignore .gitleaksignore, par son empreinte (jamais un dossier, jamais un chemin absolu)', () => {
+    const fichier = lire('data', 'divers', 'aide-memoire-acces.md');
+    assert.match(fichier.split('\n')[0], /^> Aide-mémoire fictif, pour la démonstration\./, 'le fichier se déclare fictif');
+    assert.match(fichier.split('\n')[8], /^- clé d'API : /, 'la ligne 9 est bien la clé que l\'empreinte vise : si le fichier change, mettre .gitleaksignore à jour');
+    assert.match(lire('README.md'), /y compris les faux secrets de `data\/divers\/`/, 'et le README le déclare');
+
+    const lignes = lire('.gitleaksignore').split('\n');
+    assert.match(lignes[0], /^# Faux secret de la démo Sécurité, déclaré dans le fichier et dans le README\.$/);
+    const empreintes = lignes.filter((l) => l.trim() !== '' && !l.startsWith('#'));
+    assert.deepEqual(empreintes, [
+      '7e1487a5ce5749582909ea3cdff3aa1ca5196ea5:data/divers/aide-memoire-acces.md:generic-api-key:9',
+      'data/divers/aide-memoire-acces.md:generic-api-key:9',
+    ], 'deux lignes : l\'empreinte git, puis l\'empreinte relative de l\'arbre de travail');
+    for (const e of empreintes) {
+      assert.ok(!e.startsWith('/') && !/users|home|\*|\?/i.test(e), `${e} : ni chemin absolu, ni motif`);
+      assert.match(e, /^(?:[0-9a-f]{40}:)?data\/divers\/aide-memoire-acces\.md:generic-api-key:\d+$/, `${e} : un seul fichier, une seule règle, une seule ligne`);
+    }
+    assert.ok(!lire('.gitleaksignore').includes('sk-'), 'aucune valeur de clé n\'est recopiée');
+  });
+
   it('veille et notes : chaque fichier se déclare fictif', () => {
     const extraits = fs.readdirSync(path.join(RACINE_REELLE, 'data', 'veille', 'extraits'));
     assert.equal(extraits.length, 6);

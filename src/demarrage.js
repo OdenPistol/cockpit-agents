@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Cockpit } from './cockpit.js';
-import { chargerConfig, ConfigError } from './config.js';
+import { chargerConfig, ConfigError, portDeLEnvironnement } from './config.js';
 import { estAbonnement } from './etat.js';
 import { demarrerServeur } from './serveur.js';
 import { compte } from './utilitaires.js';
@@ -27,8 +27,11 @@ function ouvrirNavigateur(url) {
 
 async function main() {
   let config;
+  let portChoisi = null; // le port demandé par la variable PORT, s'il y en a un : il l'emporte sur config.json
   try {
     config = chargerConfig(racine);
+    portChoisi = portDeLEnvironnement(process.env);
+    if (portChoisi !== null) config = { ...config, port: portChoisi };
   } catch (e) {
     if (e instanceof ConfigError) {
       console.error(`\n✖ ${e.message}\n`);
@@ -54,7 +57,8 @@ async function main() {
   const { agents, invalides } = cockpit.agents();
   const virgule = (n) => String(n).replace('.', ',');
   console.log('\nCockpit d\'agents prêt');
-  console.log(`  Écran       ${url}`);
+  // l'adresse réelle, celle qu'il faut ouvrir (et filmer) : avec PORT=0, c'est le port que le système a donné
+  console.log(`  Écran       ${url}${portChoisi !== null ? ' (port choisi par la variable PORT)' : ''}`);
   if (claude.ok) {
     const abonnement = estAbonnement(config, claude);
     const etat = claude.connecte === false ? ' · NON CONNECTÉ : tape « claude auth login » dans un terminal' : '';

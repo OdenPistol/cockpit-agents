@@ -1,0 +1,6 @@
+# Faux secret de la démo Sécurité, déclaré dans le fichier et dans le README.
+# La clé d'API écrite à la ligne 9 de data/divers/aide-memoire-acces.md est inventée : l'agent Sécurité doit la trouver.
+# Une seule alerte est ignorée, par son empreinte (aucune valeur n'est recopiée ici) : jamais un dossier entier, jamais un chemin absolu.
+# Empreinte de l'historique git (gitleaks git), puis empreinte de l'arbre de travail (gitleaks dir).
+7e1487a5ce5749582909ea3cdff3aa1ca5196ea5:data/divers/aide-memoire-acces.md:generic-api-key:9
+data/divers/aide-memoire-acces.md:generic-api-key:9

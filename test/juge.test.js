@@ -27,7 +27,7 @@ const ATTENDU = { agent: 'factures', sortie: SORTIE, criteres: CRITERES };
 function verdict({
   mot = 'REJETÉ', agent = 'factures', sortie = `../../${SORTIE}`, etats = ['OK', 'OK', 'ÉCART'],
   corrections = ['Écrire 1 560,00 € pour F-2026-0079.\n   Preuve : « 1 650,00 € », fichier ligne 20 : 1300 + 260 = 1560.'],
-  bilan = 'Factures rejeté, 1 correction.',
+  bilan = `Factures rejeté, ${corrections?.length ?? 0} correction${(corrections?.length ?? 0) > 1 ? 's' : ''}.`,
 } = {}) {
   return [
     '# Verdict du Juge : Factures',
@@ -203,6 +203,74 @@ describe('le verdict du Juge, lu par machine : le format', () => {
     assert.match(lireVerdict(accepte().replace('Aucune.', 'Tout va bien.'), ATTENDU).erreur, /doit dire « Aucune\. »/);
     assert.match(lireVerdict(accepte().replace(/\n\n## Corrections[\s\S]*$/, ''), ATTENDU).erreur, /la section « Corrections » manque/);
     assert.equal(lireVerdict(accepte().replace('Aucune.', 'Aucune'), ATTENDU).ok, true, 'le point final n\'est pas exigé');
+  });
+
+  it('un verdict qui se répète est refusé : deux lignes « Verdict : » (contradictoires, ou identiques), une section en double', () => {
+    const refus = (texte, motif) => {
+      const v = lireVerdict(texte, ATTENDU);
+      assert.equal(v.ok, false, texte);
+      assert.match(v.erreur, motif, texte);
+    };
+    // B : deux lignes « Verdict : »
+    refus(accepte().replace('Agent vérifié', 'Verdict : REJETÉ\nAgent vérifié'), /plusieurs lignes « Verdict : »/);
+    refus(verdict().replace('Agent vérifié', 'Verdict : ACCEPTÉ\nAgent vérifié'), /plusieurs lignes « Verdict : »/);
+    refus(accepte().replace('Agent vérifié', 'Verdict : ACCEPTÉ\nAgent vérifié'), /plusieurs lignes « Verdict : »/);
+    refus(`${accepte()}\nVerdict : REJETÉ\n`, /plusieurs lignes « Verdict : »/);
+    refus(accepte().replace('Verdict : ACCEPTÉ', '**Verdict : ACCEPTÉ**\nverdict : rejeté'), /plusieurs lignes « Verdict : »/);
+    // C : une section « Critères » ou « Corrections » écrite deux fois (le cas du juge : OK d'abord, ÉCART ensuite)
+    refus(`${accepte()}\n## Critères\n\n1. ÉCART : c1\n2. OK : c2\n3. OK : c3\n`, /la section « Critères » est écrite plusieurs fois/);
+    refus(`${accepte()}\n## Critères (rappel)\n\n1. OK : c1\n2. OK : c2\n3. OK : c3\n`, /la section « Critères » est écrite plusieurs fois/);
+    refus(`${verdict()}\n## Corrections\n\n1. Autre chose.\n   Preuve : x.\n`, /la section « Corrections » est écrite plusieurs fois/);
+    refus(`${accepte()}\n## corrections\n\nAucune.\n`, /la section « Corrections » est écrite plusieurs fois/);
+    // une seule de chaque : toujours accepté
+    assert.equal(lireVerdict(accepte(), ATTENDU).ok, true);
+    assert.equal(lireVerdict(verdict(), ATTENDU).ok, true);
+  });
+
+  it('un « Bilan : » qui contredit le verdict est refusé : « rejeté » sous ACCEPTÉ, « accepté » sous REJETÉ, un mauvais « N critères sur N », un mauvais « N corrections »', () => {
+    const refus = (texte, motif) => {
+      const v = lireVerdict(texte, ATTENDU);
+      assert.equal(v.ok, false, texte);
+      assert.match(v.erreur, motif, texte);
+    };
+    // D : le mot
+    refus(accepte({ bilan: 'Factures rejeté, 2 corrections.' }), /le Bilan dit « rejeté » alors que le verdict est ACCEPTÉ/);
+    refus(accepte({ bilan: 'Factures rejetée, 3 critères sur 3.' }), /le Bilan dit « rejeté » alors que le verdict est ACCEPTÉ/);
+    refus(accepte({ bilan: 'Rejet de Factures.' }), /le Bilan dit « rejeté » alors que le verdict est ACCEPTÉ/);
+    refus(verdict({ bilan: 'Factures accepté, 3 critères sur 3.' }), /le Bilan dit « accepté » alors que le verdict est REJETÉ/);
+    refus(verdict({ bilan: 'Factures ACCEPTÉE, 1 correction.' }), /le Bilan dit « accepté » alors que le verdict est REJETÉ/);
+    // D : le nombre de critères (celui de la DoD : 3) ; sous ACCEPTÉ, tous sont respectés
+    refus(accepte({ bilan: 'Factures accepté, 5 critères sur 5.' }), /le Bilan dit « 5 critères sur 5 » : la DoD a 3 critères/);
+    refus(accepte({ bilan: 'Factures accepté, 3 critères sur 2.' }), /la DoD a 3 critères/);
+    refus(accepte({ bilan: 'Factures accepté, 2 critères sur 3.' }), /le Bilan dit « 2 critères sur 3 » : un verdict ACCEPTÉ respecte les 3 critères/);
+    refus(verdict({ bilan: 'Factures rejeté, 2 critères sur 4.' }), /la DoD a 3 critères/);
+    // D : le nombre de corrections
+    refus(verdict({ bilan: 'Factures rejeté, 2 corrections.' }), /le Bilan dit « 2 corrections » : le verdict a 1 correction/);
+    refus(accepte({ bilan: 'Factures accepté, 1 correction.' }), /le verdict a 0 correction/);
+    refus(verdict({ etats: ['ÉCART', 'OK', 'ÉCART'], corrections: ['Un.\n   Preuve : a.', 'Deux.\n   Preuve : b.'], bilan: 'Factures rejeté, 1 correction.' }), /le Bilan dit « 1 correction » : le verdict a 2 corrections/);
+  });
+
+  it('un « Bilan : » cohérent est accepté : bon nombre, négation devant le mot, ou pas de Bilan du tout', () => {
+    const ok = (texte) => {
+      const v = lireVerdict(texte, ATTENDU);
+      assert.equal(v.ok, true, `${texte}\n→ ${v.erreur}`);
+    };
+    ok(accepte());
+    ok(verdict());
+    ok(verdict({ bilan: 'Factures rejeté, 2 critères sur 3, 1 correction.' }));
+    ok(verdict({ bilan: 'Factures rejeté, 1 critère sur 3 en écart, 1 correction.' }));
+    ok(verdict({ bilan: 'Factures non accepté, 1 correction.' }));
+    ok(accepte({ bilan: 'Factures pas rejeté : accepté, 3 critères sur 3, 0 correction.' }));
+    ok(verdict({ etats: ['ÉCART', 'OK', 'ÉCART'], corrections: ['Un.\n   Preuve : a.', 'Deux.\n   Preuve : b.'], bilan: 'Factures rejeté, 2 corrections.' }));
+    ok(verdict().replace(/^Bilan : .*\n/m, ''));
+    assert.equal(lireVerdict(verdict().replace(/^Bilan : .*\n/m, ''), ATTENDU).bilan, null);
+  });
+
+  it('un critère marqué OK dont le texte dit ÉCART est refusé : le verdict se dément lui-même', () => {
+    const v = lireVerdict(accepte().replace('2. OK : Aucune facture n\'est oubliée.', '2. OK : ÉCART en fait, montant faux'), ATTENDU);
+    assert.equal(v.ok, false);
+    assert.match(v.erreur, /le critère 2 est marqué OK mais son texte dit ÉCART/);
+    assert.equal(lireVerdict(accepte().replace('2. OK : Aucune facture n\'est oubliée.', '2. OK : Aucune facture n\'est oubliée, pas d\'écart.'), ATTENDU).ok, true);
   });
 
   it('un texte quelconque n\'est jamais un accord : le mot ACCEPTÉ dans une phrase libre ne suffit pas', () => {
@@ -541,8 +609,15 @@ describe('les verdicts réels livrés en exemple (docs/exemples-de-sorties/)', (
     assert.deepEqual(v.criteres.map((c) => c.ok), [true, true, false, true, true]);
     assert.equal(v.corrections.length, 1);
     assert.match(v.corrections[0].texte, /F-2026-0079/);
-    assert.match(v.corrections[0].preuve, /1300,00 \+ 260,00 = 1560,00/);
+    assert.match(v.corrections[0].preuve, /1300 \+ 260 = 1560,00/);
     assert.equal(v.bilan, 'Factures rejeté, 1 correction.');
+  });
+
+  it('ce sont le premier et le deuxième verdict de la première séquence réelle du 29/10/2026 (mêmes noms, même ordre) : le rejet, puis l\'accord qui suit sa relance', () => {
+    assert.match(lire('verdict-factures-2026-10-29-1.md'), /^Verdict : REJETÉ$/m);
+    assert.match(lire('verdict-factures-2026-10-29-2.md'), /^Verdict : ACCEPTÉ$/m);
+    // le rejet cite la sortie telle que Factures l'avait écrite avant la relance : l'erreur recopiée, aucun signalement
+    assert.match(lire('verdict-factures-2026-10-29-1.md'), /le tableau \(ligne 14\) et le brouillon \(ligne 90\) donnent « 1 650,00 € »/);
   });
 
   it('l\'accord qui suit la relance avec les corrections : lu sans erreur, cinq critères sur cinq', () => {

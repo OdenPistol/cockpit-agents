@@ -11,6 +11,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test \"test/*.test.js\"",
-    "essai": "node scripts/essai.js"
+    "essai": "node scripts/essai.js",
+    "remise-a-zero": "node scripts/remise-a-zero.js"
   }
 }

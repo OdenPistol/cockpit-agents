@@ -43,6 +43,7 @@ Bilan : <nom de l'agent> rejeté, N corrections.
 - La section « Critères » compte exactement un critère par critère de la DoD, numérotés comme elle, chacun écrit « N. OK : … » ou « N. ÉCART : … ».
 - Un verdict ACCEPTÉ n'a aucun ÉCART, une ligne « Bilan : <nom de l'agent> accepté, N critères sur N. » et sa section « Corrections » dit seulement « Aucune. ». Un verdict REJETÉ a au moins un ÉCART et au moins une correction, chacune avec sa « Preuve : ».
 - Accorde chaque nom avec N dans le bilan : au singulier pour zéro et un (« 1 correction »), au pluriel dès deux (« 2 corrections », « 5 critères sur 5 »).
+- Le bilan dit la même chose que le verdict : « rejeté » avec autant de corrections que dans la section « Corrections », ou « accepté » avec « N critères sur N », N étant le nombre de critères de la DoD. Une seule ligne « Verdict : », une seule section « Critères », une seule section « Corrections ».
 
 ## Règles
 

@@ -20,6 +20,8 @@ npm start
 
 Le cockpit s'ouvre dans votre navigateur sur http://127.0.0.1:4321. Ctrl+C dans le Terminal l'arrête.
 
+Le port 4321 est déjà pris, par une autre copie du cockpit par exemple ? Lancez `PORT=4322 npm start` : aucun fichier n'est modifié, l'autre copie n'est pas touchée, et l'adresse affichée au démarrage est la bonne (c'est elle qu'il faut ouvrir).
+
 Un agent part quand vous cliquez sur « Lancer », ou tout seul à son heure prévue : quatre agents en ont une, entre 07:00 et 08:00.
 
 Option : faire tourner chaque agent une fois, à la suite, avec le coût total à la fin.
@@ -32,15 +34,17 @@ Les huit agents lancés ont coûté 0,495 € en équivalent API à l'essai du 2
 
 ## Nouvelle version : l'agent Juge
 
-Version 1.1.0 (voir le [CHANGELOG](CHANGELOG.md)). Le principe tient en cinq lignes :
+Un second agent vérifie le travail du premier avant que vous vous en serviez, avec des critères écrits d'avance. Version 1.1.0 (voir le [CHANGELOG](CHANGELOG.md)). Le principe en cinq lignes :
 
-- Les critères sont écrits AVANT le travail, dans une « definition of done » : un fichier `dod.md` de trois à cinq critères vérifiables, dans le dossier de l'agent (par exemple `agents/factures/dod.md`). [Comment l'écrire](docs/ecrire-une-dod.md).
+- Les critères sont écrits **avant** le travail, dans une « definition of done » : un fichier `dod.md` de trois à cinq critères vérifiables, dans le dossier de l'agent (par exemple `agents/factures/dod.md`). [Comment l'écrire](docs/ecrire-une-dod.md).
 - Un second agent, le Juge, compare le travail de l'agent à ces critères, un par un, et écrit un verdict : ACCEPTÉ ou REJETÉ, avec des corrections numérotées et leur preuve.
 - Celui qui juge ne produit pas : le Juge ne corrige jamais, il n'a que les outils Read et Write et n'écrit que dans `out/juge/`.
 - Sous l'agent vérifié, l'écran affiche « Vérifié par le Juge : accepté » ou « Rejeté : 1 correction » ; un clic ouvre le verdict.
 - Rien ne repart seul : un rejet attend votre décision, « Relancer avec les corrections » ou rien.
 
-Pour l'essayer : lancez le cockpit, cliquez sur « Lancer » à droite de Factures, puis sur « Lancer le Juge » sous son nom. Le fichier `data/factures/factures.csv` contient une erreur plantée exprès (le total TTC de la facture F-2026-0079 est faux) : le Juge la relève et rejette la sortie. Cliquez sur « Rejeté » pour lire le verdict, puis sur « Relancer avec les corrections », puis de nouveau sur « Lancer le Juge » : il accepte. Le Juge a son propre budget par jour (0,40 €), compté dans le plafond comme celui des autres agents.
+Pour l'essayer : lancez le cockpit, cliquez sur « Lancer » à droite de Factures, attendez la fin de son passage, puis cliquez sur « Lancer le Juge » sous son nom. Le fichier `data/factures/factures.csv` contient une erreur plantée exprès (le total TTC de la facture F-2026-0079 est faux). Le plus souvent, le Juge la relève et rejette la sortie (4 rejets sur 4 jugements à la mesure du 29/10/2026). Il peut arriver que Factures repère l'erreur lui-même : le Juge accepte alors du premier coup. Remettez à zéro (`npm run remise-a-zero`) et relancez Factures. Après un rejet, cliquez sur « Rejeté » pour lire le verdict, puis sur « Relancer avec les corrections », puis de nouveau sur « Lancer le Juge » : il accepte (trois fois sur trois à la même mesure).
+
+Un cycle complet (rejet, relance, accord) coûte environ 0,20 € en équivalent API. Le Juge a son propre budget par jour (0,40 €), compté dans le plafond comme celui des autres agents : cela fait environ 8 passages du Juge par jour. `npm run remise-a-zero` vide `out/` et `journal/` (les sorties et l'historique des agents, rien d'autre) et efface donc aussi le compteur du plafond du jour : à faire entre deux prises, pas pendant qu'un agent tourne.
 
 ## Ce qu'il ne fait pas encore
 
@@ -61,6 +65,7 @@ Le format ligne par ligne, avec un exemple à copier, est dans le [README comple
 
 - Un ordinateur (Mac, Windows ou Linux), Node 22 ou plus, et Claude Code (abonnement Claude ou clé API).
 - Testé sur macOS ; sous Windows et Linux, l'ouverture du navigateur est prévue (src/demarrage.js) mais pas encore testée.
+- Testé avec Claude Code 2.1.308 (29/10/2026). Si votre version est plus ancienne, tapez `claude update`.
 
 Le cockpit est gratuit, Claude Code ne l'est pas : chaque passage d'un agent est pris sur votre abonnement ou facturé sur votre clé API.
 

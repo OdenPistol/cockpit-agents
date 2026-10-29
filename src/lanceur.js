@@ -19,6 +19,8 @@
 //   CLAUDE_CODE_DISABLE_AUTO_MEMORY=1   pas de mémoire automatique
 //   --strict-mcp-config             aucun serveur MCP ni connecteur de compte (Gmail, Drive…)
 //   --disable-slash-commands        aucune skill ni commande personnelle
+// Le Juge garde --strict-mcp-config même avec « configuration_isolee »: false : celui qui juge n'a jamais accès aux connecteurs du compte
+// (messagerie, fichiers), quelle que soit la configuration choisie pour les autres agents.
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -29,6 +31,7 @@ import { ceQuIlAFait } from './bilan.js';
 import { usdVersEur } from './cout.js';
 import { FormateurFlux } from './flux.js';
 import { ajouterEntree } from './journal.js';
+import { ID_JUGE } from './juge.js';
 import { arrondir, compte, court, duree, eur, isoLocal, minusculeInitiale, nettoyerChemins } from './utilitaires.js';
 
 const OUTILS_ECRITURE = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -129,6 +132,8 @@ export function construireCommande(agent, config, racine) {
       '--disable-slash-commands',
     );
     env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
+  } else if (agent.id === ID_JUGE) {
+    args.push('--strict-mcp-config');
   }
 
   return { commande: config.commande_claude, args, env, cwd: dossierAgent, sortie, racineReelle: reel };

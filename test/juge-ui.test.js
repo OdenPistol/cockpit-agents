@@ -103,6 +103,7 @@ describe('l\'écran : le verdict du Juge', () => {
     const carte = page.avecClasse('verdict')[0];
     assert.ok(carte.className.split(' ').includes('refus'));
     assert.equal(page.avecClasse('verdict-score')[0].textContent, '2/3');
+    assert.equal(page.avecClasse('verdict-score')[0].title, '2 critères respectés sur 3 (ce n\'est pas une note : un seul écart suffit pour rejeter)', 'l\'infobulle dit que 2/3 n\'est pas une note');
     assert.equal(page.avecClasse('verdict-titre')[0].avecClasse('verdict-suite')[0].textContent, '1 correction à faire');
     assert.equal(page.avecClasse('verdict-titre')[0].enfants[0].textContent, 'Rejeté');
     const criteres = page.avecClasse('critere');
@@ -127,6 +128,7 @@ describe('l\'écran : le verdict du Juge', () => {
     const page = ecran.construireVerdict(agent({ etat: 'accepte', texte: 'Vérifié par le Juge : accepté', peut_relancer: false }, { verdict: 'accepte', criteres: tous, corrections: [] }));
     assert.ok(page.avecClasse('verdict')[0].className.split(' ').includes('ok'));
     assert.equal(page.avecClasse('verdict-score')[0].textContent, '3/3');
+    assert.equal(page.avecClasse('verdict-score')[0].title, '3 critères respectés sur 3');
     assert.equal(page.avecClasse('verdict-titre')[0].enfants[0].textContent, 'Accepté');
     assert.equal(page.avecClasse('verdict-suite')[0].textContent, 'tous les critères sont respectés');
     assert.equal(page.avecClasse('correction').length, 0);

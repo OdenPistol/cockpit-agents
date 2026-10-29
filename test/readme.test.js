@@ -266,11 +266,57 @@ describe('la nouvelle version : le Juge est annoncé tel qu\'il est livré', () 
   });
 
   it('le CHANGELOG : l\'entrée 1.1.0 « date à remplir à la publication », puis la 1.0.0 datée du 28/10/2026', () => {
+    // À la publication : remplacer « date à remplir à la publication » par la date, dans CHANGELOG.md et dans l'assertion ci-dessous,
+    // dans le même commit (sinon ce test échoue, exprès : il empêche de publier avec le texte provisoire).
+
     assert.match(changelog, /^# Changelog\n/);
     const titres = [...changelog.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
     assert.deepEqual(titres, ['1.1.0 (date à remplir à la publication) : l\'agent Juge', '1.0.0 (28/10/2026) : le cockpit d\'agents']);
     assert.match(changelog, /Le coût du Juge compte dans son budget et dans le plafond du jour/);
+    assert.match(changelog, /« Vérifié par le Juge : accepté » ou « Rejeté : 1 correction »/);
+    assert.match(changelog, /le nombre de critères respectés, par exemple 4\/5, puis les critères, les corrections et leurs preuves/);
+    assert.ok(!/score/i.test(changelog), 'pas de « score »');
+    for (const nouveau of ['`PORT=4322 npm start`', '`npm run remise-a-zero`', '`.gitleaksignore`', '`--strict-mcp-config`']) assert.ok(changelog.includes(nouveau), nouveau);
     assert.match(changelog, /F-2026-0079/);
+  });
+
+  it('la section « Nouvelle version » commence par ce que fait le Juge, en une phrase, avant le numéro de version et le principe en cinq lignes', () => {
+    assert.ok(sectionJuge.startsWith('## Nouvelle version : l\'agent Juge\n\nUn second agent vérifie le travail du premier avant que vous vous en serviez, avec des critères écrits d\'avance. Version 1.1.0 (voir le [CHANGELOG](CHANGELOG.md)). Le principe en cinq lignes :\n'));
+    assert.ok(sectionJuge.includes('écrits **avant** le travail'), 'pas de capitales : « avant » en gras');
+    assert.ok(!/\bAVANT\b/.test(court), 'aucun mot en capitales dans le README');
+  });
+
+  it('« Pour l\'essayer » : d\'abord attendre la fin du passage de Factures ; la variabilité est dite avec les chiffres mesurés, puis la remise à zéro', () => {
+    assert.ok(sectionJuge.includes('cliquez sur « Lancer » à droite de Factures, attendez la fin de son passage, puis cliquez sur « Lancer le Juge » sous son nom.'));
+    // mesure du 29/10/2026 : Factures a recopié l'erreur à chacun des 5 passages où le fichier de données n'avait pas été corrigé à la main ;
+    // le Juge en a jugé quatre et rejeté quatre. Le seul accord du premier coup du journal suit le passage où le CSV avait été corrigé à la main.
+    assert.ok(sectionJuge.includes('Le plus souvent, le Juge la relève et rejette la sortie (4 rejets sur 4 jugements à la mesure du 29/10/2026). Il peut arriver que Factures repère l\'erreur lui-même : le Juge accepte alors du premier coup. Remettez à zéro (`npm run remise-a-zero`) et relancez Factures.'));
+    assert.ok(sectionJuge.includes('puis de nouveau sur « Lancer le Juge » : il accepte (trois fois sur trois à la même mesure).'));
+  });
+
+  it('le coût d\'un cycle, le nombre de passages du Juge par jour, et ce que la remise à zéro efface, sont dits', () => {
+    assert.ok(sectionJuge.includes('Un cycle complet (rejet, relance, accord) coûte environ 0,20 € en équivalent API.'));
+    assert.ok(sectionJuge.includes('cela fait environ 8 passages du Juge par jour'));
+    assert.ok(sectionJuge.includes('`npm run remise-a-zero` vide `out/` et `journal/` (les sorties et l\'historique des agents, rien d\'autre) et efface donc aussi le compteur du plafond du jour'));
+    // 0,40 € de budget, environ 0,05 € le passage : 8 passages ; un cycle = 2 passages de Factures et 2 du Juge, environ 0,05 € chacun
+    assert.ok(juge.budget_jour_eur / 0.05 === 8);
+  });
+
+  it('le port : PORT=4322 npm start dans les deux README, sans toucher à config.json ; la version de Claude Code testée', () => {
+    assert.ok(court.includes('Le port 4321 est déjà pris, par une autre copie du cockpit par exemple ? Lancez `PORT=4322 npm start` : aucun fichier n\'est modifié, l\'autre copie n\'est pas touchée, et l\'adresse affichée au démarrage est la bonne (c\'est elle qu\'il faut ouvrir).'));
+    assert.ok(readme.includes('**Le port 4321 est déjà pris**'));
+    assert.ok(readme.includes('`PORT=4322 npm start`'));
+    assert.ok(readme.includes('La variable `PORT` l\'emporte sur le réglage `port` de `config.json`, sans modifier aucun fichier et sans toucher à l\'autre copie'));
+    assert.ok(court.includes('- Testé avec Claude Code 2.1.308 (29/10/2026). Si votre version est plus ancienne, tapez `claude update`.'));
+    assert.ok(!/\b(kill|tuez|arrêtez l'autre)\b/i.test(court + readme), 'on ne dit jamais d\'arrêter l\'autre copie');
+  });
+
+  it('la remise à zéro est documentée dans le README complet, avec ce qu\'elle touche et ce qu\'elle ne touche pas', () => {
+    assert.match(readme, /`npm run remise-a-zero` vide `out\/<agent>\/` et supprime `journal\/\*\.jsonl`/);
+    assert.match(readme, /Rien d'autre n'est touché : ni `agents\/`, ni `data\/`, ni `config\.json`/);
+    assert.match(readme, /le coût du jour, les budgets des agents et le plafond se relisent dans le journal|les budgets des agents et le plafond se relisent dans le journal/);
+    assert.match(readme, /Un cycle complet \(rejet, relance, accord\) coûte environ 0,20 € en équivalent API\./);
+    assert.match(readme, /cela fait environ 8 passages par jour/);
   });
 
   it('la section « Nouvelle version » : le principe en cinq lignes, comment l\'essayer, avec les mots exacts de l\'écran', () => {
@@ -291,6 +337,14 @@ describe('la nouvelle version : le Juge est annoncé tel qu\'il est livré', () 
     assert.ok(fs.existsSync(path.join(RACINE_REELLE, 'docs', 'ecrire-une-dod.md')));
   });
 
+  it('la page « comment écrire une DoD » commence par « Par où commencer », donne un exemple hors factures (Veille), et dit que 4/5 n\'est pas une note', () => {
+    assert.match(dod, /^## Par où commencer\n\nPrenez la consigne de votre agent et demandez-vous : si on me rendait ce travail, qu'est-ce qui me le ferait refuser \? Notez chaque réponse, gardez les trois à cinq erreurs qui coûteraient le plus cher, puis rendez chacune vérifiable avec les règles ci-dessous\.$/m);
+    assert.ok(dod.indexOf('## Par où commencer') < dod.indexOf('## Les règles d\'un bon critère'), '« les règles ci-dessous » viennent après');
+    assert.match(dod, /^\| Les infos sont récentes\. \| Chaque information cite sa source \(lien\) et une date de moins de 7 jours\. \|$/m);
+    assert.match(dod, /Le verdict affiche combien de critères sont respectés \(par exemple 4\/5\), mais ce n'est pas une note : un seul écart suffit pour que le verdict soit REJETÉ\./);
+    assert.ok(!/score/i.test(dod), 'pas de « score »');
+  });
+
   it('la page « comment écrire une DoD » tient en une page, et son exemple est la DoD livrée de Factures, mot pour mot', () => {
     assert.ok(dod.split('\n').length <= 70, `${dod.split('\n').length} lignes`);
     assert.match(dod, /s'écrit \*\*avant\*\* le travail/);
@@ -303,7 +357,7 @@ describe('la nouvelle version : le Juge est annoncé tel qu\'il est livré', () 
     assert.match(readme, /^## Les 10 agents$/m);
     assert.match(readme, /^\| Juge \|.*`out\/juge\/` \|$/m);
     for (const texte of [
-      '5 critères écrits · rien à vérifier encore', 'À vérifier par le Juge', 'Le Juge vérifie…', 'Vérifié par le Juge : accepté', 'Rejeté : 2 corrections',
+      '5 critères écrits · rien à vérifier encore', 'À vérifier par le Juge', 'Le Juge vérifie…', 'Vérifié par le Juge : accepté', 'Rejeté : 1 correction',
       'Verdict du Juge illisible', 'Le Juge n\'a pas pu vérifier', 'Lancer le Juge', 'Relancer avec les corrections', 'Relancer le Juge',
     ]) assert.ok(readme.includes(texte), `« ${texte} » absent du README complet`);
     assert.match(readme, /^## Le Juge et la definition of done$/m);
@@ -319,14 +373,14 @@ describe('la nouvelle version : le Juge est annoncé tel qu\'il est livré', () 
       assert.ok(readme.includes(`\`${nom}\``), nom);
       assert.ok(fs.existsSync(path.join(RACINE_REELLE, 'docs', 'exemples-de-sorties', nom)), nom);
     }
-    // mesure du 29/10/2026, quatre passages réels : le journal n'est pas publié, le chiffre est écrit ici comme celui de l'essai du 28/10
-    assert.match(readme, /Le Juge, mesuré le 29\/10\/2026 : de 0,042 € à 0,055 € par passage \(sept passages, de 10 à 30 secondes, 4 tours chacun\)/);
+    // mesure du 29/10/2026, neuf passages réels : le journal n'est pas publié, le chiffre est écrit ici comme celui de l'essai du 28/10
+    assert.match(readme, /Le Juge, mesuré le 29\/10\/2026 : de 0,042 € à 0,055 € par passage \(neuf passages, de 10 à 30 secondes, 4 tours chacun\)/);
   });
 
-  it('l\'essai réel du Juge est dit tel qu\'il s\'est passé (quatre sorties sur quatre recopient l\'erreur, trois rejets, deux accords), avec sa réserve', () => {
-    assert.match(readme, /Mesure du 29\/10\/2026 \(Claude Code 2\.1\.308, modèle sonnet\) : sur quatre passages de Factures avec l'erreur plantée, Factures a recopié l'erreur quatre fois ; le Juge a rejeté les trois sorties qu'il a jugées, pour le même critère, et il a accepté les deux sorties refaites avec les corrections\./);
+  it('l\'essai réel du Juge est dit tel qu\'il s\'est passé (cinq sorties sur cinq recopient l\'erreur, quatre rejets, trois accords), avec sa réserve', () => {
+    assert.match(readme, /Mesure du 29\/10\/2026 \(Claude Code 2\.1\.308, modèle sonnet\) : sur cinq passages de Factures avec l'erreur plantée, Factures a recopié l'erreur cinq fois ; le Juge a rejeté les quatre sorties qu'il a jugées, pour le même critère, et il a accepté les trois sorties refaites avec les corrections\./);
     assert.match(readme, /Essayé en réel le 29\/10\/2026 : une sortie qui contenait une fausse instruction officielle/);
-    assert.match(readme, /L'autre voie a aussi été essayée en réel \(corriger le fichier de données avant de relancer Factures\) : Factures a écrit 1 560,00 € et un total de 14 220,00 €, et le Juge a accepté du premier coup\./);
+    assert.match(readme, /L'autre voie a aussi été essayée en réel \(corriger le fichier de données avant de relancer Factures\) : Factures a écrit 1 560,00 € et un total de 14 220,00 €, et le Juge a accepté du premier coup \(le journal ne garde pas trace de la correction des données : ce passage y apparaît comme un passage ordinaire de Factures\)\./);
     assert.match(readme, /Un modèle peut varier d'un essai à l'autre : c'est une mesure, pas une garantie\./);
     assert.match(readme, /Il juge le fichier que l'agent a écrit en dernier/);
   });
