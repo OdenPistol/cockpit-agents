@@ -1,6 +1,6 @@
 # Comment écrire une bonne definition of done
 
-Une definition of done (DoD) est la liste des critères qu'un travail doit respecter pour être accepté. Elle s'écrit **avant** le travail, jamais après avoir vu le résultat : sinon on règle les critères sur ce que l'agent a produit, et le Juge ne juge plus rien. Dans ce cockpit, c'est le fichier `agents/<agent>/dod.md`. Le Juge compare la sortie de l'agent à chaque critère, un par un.
+Une definition of done (DoD) est la liste des critères qu'un travail doit respecter pour être accepté. Elle s'écrit **avant** le travail, jamais après avoir vu le résultat : sinon on règle les critères sur ce que l'agent a produit, et le Juge ne juge plus rien. Dans ce cockpit, c'est le fichier `agents/<agent>/dod.md`. Le Juge compare la sortie de l'agent à chaque critère, un par un. Donnez-la aussi à l'agent qui travaille, dans sa consigne : il se trompera moins, et le Juge vérifiera quand même. Dans la démo, Factures ne la reçoit pas, exprès, pour montrer ce que le Juge rattrape.
 
 ## Par où commencer
 
